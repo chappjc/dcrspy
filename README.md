@@ -139,7 +139,7 @@ Block chain data obtained from dcrd includes:
 
 1. Block header (hash, voters, height, difficulty, nonce, time, etc.)
 
-```
+ ```
 {
     "hash": "0000000000000c21323dc60866aa5a869b57c001589a026cf0a1a18765971d83",
     "confirmations": 1,
@@ -165,7 +165,7 @@ Block chain data obtained from dcrd includes:
 
 2. Ticket pool info.  This is a custom data structure.
 
-```
+ ```
 {
     "poolsize": 42635,
     "poolvalue": 729895.86066478,
@@ -176,7 +176,7 @@ Block chain data obtained from dcrd includes:
 3. Ticket fee info (block).  This is the usual output of `ticketfeeinfo` with
 no extra arguments:
 
-```
+ ```
 {
     "height": 34624,
     "number": 3,
@@ -191,7 +191,7 @@ no extra arguments:
 4. Current and estimated stake difficulty.  These are the usual outputs of 
 `estimatestakediff` and `getstakedifficulty`:
 
-```
+ ```
 {
     "min": 21.92454703,
     "max": 50.34015709,
