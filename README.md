@@ -22,7 +22,7 @@ Two types of information are monitored:
 
 A connection to dcrwallet is optional, but for stake information it is required.
 
-See [Types of Data](#types-of-data) below for details.
+See [Data Details](#data-details) below for details.
 
 
 ## Output
@@ -113,27 +113,27 @@ Help Options:
 
 ### Config file
 
-```
+```ini
 [Application Options]
 
 debuglevel=debug
 
-dcrduser=dcrdblah
-dcrdpass=dcrdasdf
+dcrduser=duser
+dcrdpass=asdfExample
 
 dcrdserv=localhost:9109
-dcrdcert=/home/jon/.dcrd/rpc.cert
+dcrdcert=/home/me/.dcrd/rpc.cert
 
-dcrwuser=bdcrw
-dcrwpass=qwerty
+dcrwuser=wuser
+dcrwpass=qwertyExample
 
 dcrwserv=localhost:9110
-dcrwcert=/home/jon/.dcrwallet/mainnet_pool_watcher/rpc.cert
+dcrwcert=/home/me/.dcrwallet/rpc.cert
 
-;noclienttls=true
+;noclienttls=false
 ```
 
-## Types of Data
+## Data Details
 
 Block chain data obtained from dcrd includes:
 
