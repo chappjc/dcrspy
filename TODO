@@ -1,0 +1,44 @@
+dcrspy TODO
+====
+
+Output 
+    JSON
+    stdout
+    MySQL
+    Memory?
+
+Input
+    Types of data
+    Which outputs
+    Monitor relevant tx
+    User specified command to execute on event
+
+.dcrspy folder for config file and log (vs. current dir)
+
+Mempool data collection on regular intervals or on relevant tx notification
+
+Store last results (N time points) in memory
+    For derivatives
+    Use map?
+
+Option to extract and store past data at startup (possibly without subsequent monitoring)
+
+Extract all ticket fees for a block, for extra stats:
+    Tri-mean
+    Entropy
+
+Monitor
+    Price change
+    Inserted tx
+    Mined tx
+    Voted, missed own tickets
+    Received funds
+    Fee change above threshold
+
+Email notifications
+    String array of events 
+
+Price analysis
+    Autocorrelation
+    MI
+    ECC
