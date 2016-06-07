@@ -150,34 +150,39 @@ sdifftest:
 		os.Exit(1)
 	}
 
-	// Connect to the dcrwallet server RPC client.
-	var dcrwCerts []byte
-	if !cfg.DisableClientTLS {
-		dcrwCerts, err = ioutil.ReadFile(cfg.DcrwCert)
-		if err != nil {
-			log.Errorf("Failed to read dcrwallet cert file at %s: %s\n",
-				cfg.DcrwCert, err.Error())
-			// but try anyway?
+	var dcrwClient *dcrrpcclient.Client
+	if !cfg.NoCollectStakeInfo {
+		// Connect to the dcrwallet server RPC client.
+		var dcrwCerts []byte
+		if !cfg.DisableClientTLS {
+			dcrwCerts, err = ioutil.ReadFile(cfg.DcrwCert)
+			if err != nil {
+				log.Errorf("Failed to read dcrwallet cert file at %s: %s\n",
+					cfg.DcrwCert, err.Error())
+				// but try anyway?
+			}
 		}
-	}
 
-	log.Infof("Attempting to connect to dcrwallet RPC %s as user %s "+
-		"using certificate located in %s",
-		cfg.DcrwServ, cfg.DcrwUser, cfg.DcrwCert)
+		log.Infof("Attempting to connect to dcrwallet RPC %s as user %s "+
+			"using certificate located in %s",
+			cfg.DcrwServ, cfg.DcrwUser, cfg.DcrwCert)
 
-	connCfgWallet := &dcrrpcclient.ConnConfig{
-		Host:         cfg.DcrwServ,
-		Endpoint:     "ws",
-		User:         cfg.DcrwUser,
-		Pass:         cfg.DcrwPass,
-		Certificates: dcrwCerts,
-		DisableTLS:   cfg.DisableClientTLS,
-	}
+		connCfgWallet := &dcrrpcclient.ConnConfig{
+			Host:         cfg.DcrwServ,
+			Endpoint:     "ws",
+			User:         cfg.DcrwUser,
+			Pass:         cfg.DcrwPass,
+			Certificates: dcrwCerts,
+			DisableTLS:   cfg.DisableClientTLS,
+		}
 
-	dcrwClient, err := dcrrpcclient.New(connCfgWallet, nil)
-	if err != nil {
-		fmt.Printf("Failed to start dcrwallet RPC client: %s\n", err.Error())
-		os.Exit(1)
+		dcrwClient, err = dcrrpcclient.New(connCfgWallet, nil)
+		if err != nil {
+			fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
+			" wanted to start with --nostakeinfo?\n", err.Error())
+			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v",cfg.DcrwCert)
+			os.Exit(1)
+		}
 	}
 
 	// err = syncGlobalsStartup(dcrdClient, dcrwClient, cfg)
@@ -279,8 +284,11 @@ sdifftest:
 
 	log.Infof("Closing connection to dcrd.")
 	dcrdClient.Shutdown()
-	log.Infof("Closing connection to dcrwallet.")
-	dcrwClient.Shutdown()
+
+	if !cfg.NoCollectStakeInfo {
+		log.Infof("Closing connection to dcrwallet.")
+		dcrwClient.Shutdown()
+	}
 
 	log.Infof("Bye!")
 	time.Sleep(1 * time.Second)
