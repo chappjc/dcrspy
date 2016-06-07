@@ -3,6 +3,8 @@ dcrspy
 
 **WORK IN PROGRESS**
 
+[![Gitter](https://badges.gitter.im/chappjc/dcrspy.svg)](https://gitter.im/chappjc/dcrspy?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
+
 dcrspy is a program to continuously monitor and log changes in various data
 on the Decred network.  It works by connecting to both dcrd and dcrwallet
 and responding when a new block is detected via a notifier registered with
