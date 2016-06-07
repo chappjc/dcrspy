@@ -8,11 +8,6 @@ on the Decred network.  It works by connecting to both dcrd and dcrwallet
 and responding when a new block is detected via a notifier registered with
 dcrd.
 
-by Jonathan Chappelow (chappjc)
-
-Borrowing logging and config file facilities, plus much boilerplate from
-main.go, from on dcrticketbuyer, by the Decred developers
-
 ## Types of Data
 
 Two types of information are monitored:
@@ -188,7 +183,7 @@ no extra arguments:
 }
 ```
 
-4. Current and estimated stake difficulty.  These are the usual outputs of 
+4. Current and estimated stake difficulty.  These are the usual outputs of
 `estimatestakediff` and `getstakedifficulty`:
 
  ```
@@ -210,3 +205,7 @@ Please report any issues using the [GitHub issue tracker](https://github.com/cha
 ## License
 
 dcrspy is licensed under the [copyfree](http://copyfree.org) ISC License.
+
+dcrspy borrows its logging and config file facilities, plus some boilerplate
+code in main.go, from the dcrticketbuyer project by the Decred developers.
+The rest is by Jonathan Chappelow (chappjc).

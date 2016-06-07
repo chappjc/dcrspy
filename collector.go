@@ -10,10 +10,13 @@ package main
 
 import (
 	"encoding/hex"
+	"errors"
 	"fmt"
 	//"sync/atomic"
 	"strconv"
+	"time"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
 	//"github.com/decred/dcrd/wire"
 	//"github.com/decred/dcrd/chaincfg/chainhash"
@@ -124,11 +127,30 @@ func newBlockDataCollector(cfg *config,
 func (t *blockDataCollector) collect() (*blockData, error) {
 	winSize := uint32(activeNet.StakeDiffWindowSize)
 
-	// Pull and store relevant data about the blockchain.
-	bestBlockHash, err := t.dcrdChainSvr.GetBestBlockHash()
-	if err != nil {
-		return nil, err
+	// Run first client call with a timeout
+	type bbhRes struct {
+		err  error
+		hash *chainhash.Hash
 	}
+	toch := make(chan bbhRes)
+
+	// Pull and store relevant data about the blockchain.
+	go func() {
+		bestBlockHash, err := t.dcrdChainSvr.GetBestBlockHash()
+		toch <- bbhRes{err, bestBlockHash}
+		return
+	}()
+
+	var bbs bbhRes
+	select {
+	case bbs = <-toch:
+	case <-time.After(time.Second * 10):
+		log.Errorf("Timeout waiting for dcrd.")
+		return nil, errors.New("Timeout")
+	}
+
+	bestBlockHash := bbs.hash
+
 	bestBlock, err := t.dcrdChainSvr.GetBlock(bestBlockHash)
 	if err != nil {
 		return nil, err
