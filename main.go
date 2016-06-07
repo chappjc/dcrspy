@@ -81,10 +81,12 @@ func main() {
 				// }
 				// cerr := make(chan error)
 				// go func() { cerr <- cmd.Wait() }()
+			// send to nil channel blocks
 			default:
 			}
 			select {
 			case connectChanStkInf <- height:
+			// send to nil channel blocks
 			default:
 			}
 		},
@@ -169,17 +171,11 @@ func main() {
 		dcrwClient, err = dcrrpcclient.New(connCfgWallet, nil)
 		if err != nil {
 			fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
-			" wanted to start with --nostakeinfo?\n", err.Error())
-			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v",cfg.DcrwCert)
+				" wanted to start with --nostakeinfo?\n", err.Error())
+			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v", cfg.DcrwCert)
 			os.Exit(1)
 		}
 	}
-
-	// err = syncGlobalsStartup(dcrdClient, dcrwClient, cfg)
-	// if err != nil {
-	// 	log.Errorf("Failed to start sync globals on startup: %s\n", err.Error())
-	// 	os.Exit(1)
-	// }
 
 	// Ctrl-C to shut down.
 	// Nothing should be sent the quit channel.  It should only be closed.
