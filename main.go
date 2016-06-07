@@ -98,16 +98,6 @@ func main() {
 		},
 	}
 
-sdifftest:
-	for {
-		select {
-		case <-stakeDiffChan:
-			fmt.Print("Something was already in the stake diff chan!")
-		default:
-			break sdifftest
-		}
-	}
-
 	var dcrdCerts []byte
 	if !cfg.DisableClientTLS {
 		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
