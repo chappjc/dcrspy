@@ -23,4 +23,8 @@ _testmain.go
 *.test
 *.prof
 
+dcrspy
+debug
 dcrspy.conf
+logs
+.vscode
