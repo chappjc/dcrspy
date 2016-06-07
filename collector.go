@@ -50,7 +50,7 @@ func newStakeInfoDataCollector(cfg *config,
 }
 
 // collect is the main handler for collecting chain data
-func (t *stakeInfoDataCollector) collect() (*stakeInfoData, error) {
+func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	winSize := uint32(activeNet.StakeDiffWindowSize)
 
 	// Make sure that our wallet is connected to the daemon.
@@ -66,11 +66,11 @@ func (t *stakeInfoDataCollector) collect() (*stakeInfoData, error) {
 	}
 
 	// block height
-	blockCount, err := t.dcrdChainSvr.GetBlockCount()
-	if err != nil {
-		return nil, err
-	}
-	height := uint32(blockCount)
+	// blockCount, err := t.dcrdChainSvr.GetBlockCount()
+	// if err != nil {
+	// 	return nil, err
+	// }
+	// height := uint32(blockCount)
 
 	t.idxBlockInWindow = int(height % winSize)
 	t.priceWindowNum = int(height / winSize)

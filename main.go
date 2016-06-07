@@ -196,6 +196,8 @@ func main() {
 
 	// WaitGroup for the chainMonitor and stakeMonitor
 	var wg sync.WaitGroup
+	// saver mutex, in case we want to share the same underlying output resource
+	saverMutex := new(sync.Mutex)
 
 	// Block data collector
 	var collector *blockDataCollector
@@ -209,7 +211,8 @@ func main() {
 
 		// Blockchain monitor for the collector
 		// if collector is nil, so is connectChan
-		stdoutBlockDataSaver := &BlockDataToJSONStdOut{}
+		//stdoutBlockDataSaver := &BlockDataToJSONStdOut{}
+		stdoutBlockDataSaver := NewBlockDataToJSONStdOut(saverMutex)
 		wsChainMonitor := newChainMonitor(collector, connectChan,
 			stdoutBlockDataSaver, quit, &wg)
 		go wsChainMonitor.blockConnectedHandler()
@@ -226,7 +229,8 @@ func main() {
 		}
 
 		// Stake info monitor for the stakeCollector
-		stdoutStakeInfoSaver := &StakeInfoDataToJSONStdOut{}
+		//stdoutStakeInfoSaver := &StakeInfoDataToJSONStdOut{}
+		stdoutStakeInfoSaver := NewStakeInfoDataToJSONStdOut(saverMutex)
 		wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
 			stdoutStakeInfoSaver, quit, &wg)
 		go wsStakeInfoMonitor.blockConnectedHandler()

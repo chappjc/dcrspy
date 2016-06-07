@@ -7,8 +7,11 @@
 package main
 
 import (
+	_ "errors"
 	_ "fmt"
+	"strings"
 	"sync"
+	"time"
 	//"github.com/davecgh/go-spew/spew"
 )
 
@@ -52,7 +55,7 @@ out:
 			// blocking call for data collection
 			blockData, err := p.collector.collect()
 			if err != nil {
-				log.Errorf("So, that didn't work.")
+				log.Errorf("Block data collection failed.")
 				break out
 			}
 
@@ -109,9 +112,18 @@ out:
 			daemonLog.Infof("Block height %v connected", height)
 			//atomic.StoreInt32(&glChainHeight, height)
 
-			stakeInfo, err := p.collector.collect()
+			// Let the wallet process the new block (too bad no wallet ntfns!)
+			time.Sleep(time.Millisecond * 300)
+
+			// Try to collect the data, retry if wallet says to
+		collect:
+			stakeInfo, err := p.collector.collect(uint32(height))
 			if err != nil {
-				log.Errorf("Stake info data collection failed.")
+				log.Errorf("Stake info data collection failed: %v", err)
+				if strings.Contains(err.Error(), "try again later") {
+					time.Sleep(time.Millisecond * 700)
+					goto collect // mmm, feel so dirty! maybe make this "cleaner" later
+				}
 				break out
 			}
 
