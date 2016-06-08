@@ -109,8 +109,6 @@ out:
 				log.Warnf("Block connected channel closed.")
 				break out
 			}
-			daemonLog.Infof("Block height %v connected", height)
-			//atomic.StoreInt32(&glChainHeight, height)
 
 			// Let the wallet process the new block (too bad no wallet ntfns!)
 			time.Sleep(time.Millisecond * 300)

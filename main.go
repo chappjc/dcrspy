@@ -212,9 +212,10 @@ func main() {
 		// Blockchain monitor for the collector
 		// if collector is nil, so is connectChan
 		//stdoutBlockDataSaver := &BlockDataToJSONStdOut{}
-		stdoutBlockDataSaver := NewBlockDataToJSONStdOut(saverMutex)
+		//stdoutBlockDataSaver := NewBlockDataToJSONStdOut(saverMutex)
+		fileBlockDataSaver := NewBlockDataToJSONFiles("block_data-", saverMutex)
 		wsChainMonitor := newChainMonitor(collector, connectChan,
-			stdoutBlockDataSaver, quit, &wg)
+			fileBlockDataSaver, quit, &wg)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -230,9 +231,10 @@ func main() {
 
 		// Stake info monitor for the stakeCollector
 		//stdoutStakeInfoSaver := &StakeInfoDataToJSONStdOut{}
-		stdoutStakeInfoSaver := NewStakeInfoDataToJSONStdOut(saverMutex)
+		//stdoutStakeInfoSaver := NewStakeInfoDataToJSONStdOut(saverMutex)
+		fileStakeInfoSaver := NewStakeInfoDataToJSONFiles("stake-info-", saverMutex)
 		wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
-			stdoutStakeInfoSaver, quit, &wg)
+			fileStakeInfoSaver, quit, &wg)
 		go wsStakeInfoMonitor.blockConnectedHandler()
 	}
 
