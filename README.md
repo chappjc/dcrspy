@@ -28,8 +28,10 @@ Multiple destinations for the data are planned:
 
 1. **stdout**.  JSON-formatted data is send to stdout. IMPLEMENTED.
 2. **File system**.  JSON-formatted data is written to the file system.
-   NOT YET IMPLEMENTED.
-3. **Database**. Data is inserted into a MySQL database.  NOT YET IMPLEMENTED.
+   TESTING on branch [`json_file_output`](https://github.com/chappjc/dcrspy/tree/json_file_output).
+3. **Database**. Data is inserted into a MySQL database.  NOT IMPLEMENTED.
+4. **Plain text summary**: balances, votes, current ticket price, mean fees, wallet status. NEXT.
+5. HTTP access via **RESTful API**.  NOT IMPLEMENTED.
 
 ## TO-DO
 
