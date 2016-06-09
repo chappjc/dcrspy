@@ -18,7 +18,7 @@ import (
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
 type chainMonitor struct {
 	collector          *blockDataCollector
-	dataSaver          BlockDataSaver
+	dataSavers         []BlockDataSaver
 	blockConnectedChan chan int32
 	quit               chan struct{}
 	wg                 *sync.WaitGroup
@@ -26,11 +26,11 @@ type chainMonitor struct {
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
-	blockConnChan chan int32, saver BlockDataSaver,
+	blockConnChan chan int32, savers []BlockDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup) *chainMonitor {
 	return &chainMonitor{
 		collector:          collector,
-		dataSaver:          saver,
+		dataSavers:         savers,
 		blockConnectedChan: blockConnChan,
 		quit:               quit,
 		wg:                 wg,
@@ -59,10 +59,11 @@ out:
 				break out
 			}
 
-			if p.dataSaver != nil {
-				// save data to whereever the saver wants to put it
-				go p.dataSaver.Store(blockData)
-				// TODO: Loop over a slice of savers (stdout, MySQL, etc.)
+			for _, s := range p.dataSavers {
+				if s != nil {
+					// save data to whereever the saver wants to put it
+					go s.Store(blockData)
+				}
 			}
 
 		case _, ok := <-p.quit:
@@ -78,7 +79,7 @@ out:
 // for getstakeinfo, etc.
 type stakeMonitor struct {
 	collector          *stakeInfoDataCollector
-	dataSaver          StakeInfoDataSaver
+	dataSavers         []StakeInfoDataSaver
 	blockConnectedChan chan int32
 	quit               chan struct{}
 	wg                 *sync.WaitGroup
@@ -86,11 +87,11 @@ type stakeMonitor struct {
 
 // newStakeMonitor creates a new stakeMonitor
 func newStakeMonitor(collector *stakeInfoDataCollector,
-	blockConnChan chan int32, saver StakeInfoDataSaver,
+	blockConnChan chan int32, savers []StakeInfoDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup) *stakeMonitor {
 	return &stakeMonitor{
 		collector:          collector,
-		dataSaver:          saver,
+		dataSavers:         savers,
 		blockConnectedChan: blockConnChan,
 		quit:               quit,
 		wg:                 wg,
@@ -109,8 +110,6 @@ out:
 				log.Warnf("Block connected channel closed.")
 				break out
 			}
-			daemonLog.Infof("Block height %v connected", height)
-			//atomic.StoreInt32(&glChainHeight, height)
 
 			// Let the wallet process the new block (too bad no wallet ntfns!)
 			time.Sleep(time.Millisecond * 300)
@@ -127,10 +126,11 @@ out:
 				break out
 			}
 
-			if p.dataSaver != nil {
-				// save data to whereever the saver wants to put it
-				go p.dataSaver.Store(stakeInfo)
-				// TODO: Loop over a slice of savers (stdout, MySQL, etc.)
+			for _, s := range p.dataSavers {
+				if s != nil {
+					// save data to whereever the saver wants to put it
+					go s.Store(stakeInfo)
+				}
 			}
 
 		case _, ok := <-p.quit:

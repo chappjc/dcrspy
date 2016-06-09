@@ -26,16 +26,16 @@ import (
 
 // stakeInfoData
 type stakeInfoData struct {
-	height    uint32
-	stakeinfo *dcrjson.GetStakeInfoResult
+	height           uint32
+	stakeinfo        *dcrjson.GetStakeInfoResult
+	priceWindowNum   int // trivia
+	idxBlockInWindow int // Relative block index within the difficulty period
 }
 
 type stakeInfoDataCollector struct {
-	cfg              *config
-	dcrdChainSvr     *dcrrpcclient.Client
-	dcrwChainSvr     *dcrrpcclient.Client
-	priceWindowNum   int // TODO: Use this information.
-	idxBlockInWindow int // Relative block index within the difficulty period
+	cfg          *config
+	dcrdChainSvr *dcrrpcclient.Client
+	dcrwChainSvr *dcrrpcclient.Client
 }
 
 // newStakeInfoDataCollector creates a new stakeInfoDataCollector.
@@ -47,6 +47,15 @@ func newStakeInfoDataCollector(cfg *config,
 		dcrdChainSvr: dcrdChainSvr,
 		dcrwChainSvr: dcrwChainSvr,
 	}, nil
+}
+
+func (t stakeInfoDataCollector) getHeight() (uint32, error) {
+	// block height
+	blockCount, err := t.dcrdChainSvr.GetBlockCount()
+	if err != nil {
+		return 0, err
+	}
+	return uint32(blockCount), nil
 }
 
 // collect is the main handler for collecting chain data
@@ -72,9 +81,6 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 	// }
 	// height := uint32(blockCount)
 
-	t.idxBlockInWindow = int(height % winSize)
-	t.priceWindowNum = int(height / winSize)
-
 	// Stake Info
 	getStakeInfoRes, err := t.dcrwChainSvr.GetStakeInfo()
 	if err != nil {
@@ -83,8 +89,10 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 
 	// Output
 	stakeinfo := &stakeInfoData{
-		height:    height,
-		stakeinfo: getStakeInfoRes,
+		height:           height,
+		stakeinfo:        getStakeInfoRes,
+		priceWindowNum:   int(height / winSize),
+		idxBlockInWindow: int(height % winSize) + 1,
 	}
 
 	return stakeinfo, err
@@ -105,13 +113,13 @@ type blockData struct {
 	currentstakediff dcrjson.GetStakeDifficultyResult
 	eststakediff     dcrjson.EstimateStakeDiffResult
 	poolinfo         TicketPoolInfo
+	priceWindowNum   int
+	idxBlockInWindow int
 }
 
 type blockDataCollector struct {
-	cfg              *config
-	dcrdChainSvr     *dcrrpcclient.Client
-	priceWindowNum   int
-	idxBlockInWindow int // Relative block index within the difficulty period
+	cfg          *config
+	dcrdChainSvr *dcrrpcclient.Client
 }
 
 // newBlockDataCollector creates a new blockDataCollector.
@@ -159,9 +167,6 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 	blockHeader := bestBlock.MsgBlock().Header
 
 	height := blockHeader.Height
-	t.idxBlockInWindow = int(height % winSize)
-	t.priceWindowNum = int(height / winSize)
-
 	poolSize := blockHeader.PoolSize
 	//timestamp := blockHeader.Timestamp
 
@@ -242,6 +247,8 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 		currentstakediff: *stakeDiff,
 		eststakediff:     *estStakeDiff,
 		poolinfo:         tiketPoolInfo,
+		priceWindowNum:   int(height / winSize),
+		idxBlockInWindow: int(height % winSize) + 1,
 	}
 
 	return blockdata, err

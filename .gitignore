@@ -28,3 +28,8 @@ debug
 dcrspy.conf
 logs
 .vscode
+data/*
+
+# IntelliJ IDEA
+.idea
+*.iml

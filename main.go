@@ -52,16 +52,25 @@ func main() {
 
 	dcrrpcclient.UseLogger(clientLog)
 
+	log.Infof(appName+" version %s", ver.String())
+
+	err = os.MkdirAll(cfg.OutFolder, 0755)
+	if err != nil {
+		fmt.Printf("Failed to create data output folder %s. Error: %s\n",
+			cfg.OutFolder, err.Error())
+		os.Exit(1)
+	}
+
 	// Connect to dcrd RPC server using websockets. Set up the
 	// notification handler to deliver blocks through a channel.
 	var connectChan chan int32
 	var stakeDiffChan chan int64
-	if !cfg.NoCollectBlockData {
+	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		connectChan = make(chan int32, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
 	}
 	var connectChanStkInf chan int32
-	if !cfg.NoCollectStakeInfo {
+	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
 	}
 
@@ -196,44 +205,98 @@ func main() {
 
 	// WaitGroup for the chainMonitor and stakeMonitor
 	var wg sync.WaitGroup
-	// saver mutex, in case we want to share the same underlying output resource
+	// Saver mutex, to share the same underlying output resource between block
+	// and stake info data savers
 	saverMutex := new(sync.Mutex)
 
-	// Block data collector
-	var collector *blockDataCollector
-	if !cfg.NoCollectBlockData {
-		wg.Add(1)
-		collector, err = newBlockDataCollector(cfg, dcrdClient)
-		if err != nil {
-			fmt.Printf("Failed to create block data collector: %s\n", err.Error())
-			os.Exit(1)
-		}
+	var blockDataSavers []BlockDataSaver
+	var stakeInfoDataSavers []StakeInfoDataSaver
+	if cfg.SaveJSONStdout {
+		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
+		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
+	}
+	if cfg.SaveJSONFile {
+		blockDataSavers = append(blockDataSavers,
+			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutex))
+		stakeInfoDataSavers = append(stakeInfoDataSavers,
+			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutex))
+	}
 
+	// If no savers specified, enable summary output
+	if len(blockDataSavers) == 0 {
+		cfg.SummaryOut = true
+	}
+
+	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutex)
+	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutex)
+
+	if cfg.SummaryOut {
+		blockDataSavers = append(blockDataSavers, summarySaverBlockData)
+		stakeInfoDataSavers = append(stakeInfoDataSavers, summarySaverStakeInfo)
+	}
+
+	// Block data collector
+	//var collector *blockDataCollector
+	collector, err := newBlockDataCollector(cfg, dcrdClient)
+	if err != nil {
+		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// Initial data summary prior to start of regular collection
+	blockData, err := collector.collect()
+	if err != nil {
+		fmt.Printf("Block data collection for initial summary failed.")
+		os.Exit(1)
+	}
+
+	if nil != summarySaverBlockData.Store(blockData) {
+		fmt.Printf("Failed to print initial block data summary.")
+		os.Exit(1)
+	}
+
+	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		// Blockchain monitor for the collector
 		// if collector is nil, so is connectChan
-		//stdoutBlockDataSaver := &BlockDataToJSONStdOut{}
-		stdoutBlockDataSaver := NewBlockDataToJSONStdOut(saverMutex)
+		wg.Add(1)
 		wsChainMonitor := newChainMonitor(collector, connectChan,
-			stdoutBlockDataSaver, quit, &wg)
+			blockDataSavers, quit, &wg)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
 	// Stake info data (getstakeinfo) collector
 	var stakeCollector *stakeInfoDataCollector
 	if !cfg.NoCollectStakeInfo {
-		wg.Add(1)
 		stakeCollector, err = newStakeInfoDataCollector(cfg, dcrdClient, dcrwClient)
 		if err != nil {
 			fmt.Printf("Failed to create block data collector: %s\n", err.Error())
 			os.Exit(1)
 		}
 
-		// Stake info monitor for the stakeCollector
-		//stdoutStakeInfoSaver := &StakeInfoDataToJSONStdOut{}
-		stdoutStakeInfoSaver := NewStakeInfoDataToJSONStdOut(saverMutex)
-		wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
-			stdoutStakeInfoSaver, quit, &wg)
-		go wsStakeInfoMonitor.blockConnectedHandler()
+		// Initial data summary prior to start of regular collection
+		height, err := stakeCollector.getHeight()
+		if err != nil {
+			fmt.Printf("Unable to get current block height.")
+			os.Exit(1)
+		}
+		stakeInfoData, err := stakeCollector.collect(height)
+		if err != nil {
+			fmt.Printf("Stake info data collection failed gathering initial data.")
+			os.Exit(1)
+		}
+
+		if nil != summarySaverStakeInfo.Store(stakeInfoData) {
+			fmt.Printf("Failed to print initial stake info data summary.")
+			os.Exit(1)
+		}
+
+		if !cfg.NoMonitor {
+			wg.Add(1)
+			// Stake info monitor for the stakeCollector
+			wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
+				stakeInfoDataSavers, quit, &wg)
+			go wsStakeInfoMonitor.blockConnectedHandler()
+		}
 	}
 
 	// stakediff not implemented yet as the notifier appears broken
@@ -245,7 +308,7 @@ func main() {
 					log.Infof("Stake difficulty channel closed")
 					return
 				}
-				log.Infof("Got stake difficulty change notification (%v). "+
+				log.Debugf("Got stake difficulty change notification (%v). "+
 					" Doing nothing for now.", s)
 			case <-quit:
 				log.Infof("Quitting getstakeinfo handler.")
@@ -260,6 +323,10 @@ func main() {
 	// When os.Interrupt arrives, the channel quit will be closed
 	//<-quit
 	wg.Wait()
+	if cfg.NoMonitor {
+		c <- os.Interrupt
+		time.Sleep(200)
+	}
 
 	// Closing these channels should be unnecessary if quit was handled right
 	if stakeDiffChan != nil {

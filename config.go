@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -23,7 +24,8 @@ const (
 	defaultLogLevel       = "info"
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "dcrspy.log"
-	currentVersion        = 1
+	defaultOutputDirname  = "spydata"
+	currentVersion        = "0.0.2"
 )
 
 var curDir, _ = os.Getwd()
@@ -39,6 +41,7 @@ var (
 	defaultWalletRPCKeyFile  = filepath.Join(dcrwalletHomeDir, "rpc.key")
 	defaultWalletRPCCertFile = filepath.Join(dcrwalletHomeDir, "rpc.cert")
 	defaultLogDir            = filepath.Join(curDir, defaultLogDirname)
+	defaultOutputDir         = filepath.Join(curDir, defaultOutputDirname)
 	defaultHost              = "localhost"
 
 	defaultAccountName   = "default"
@@ -48,14 +51,25 @@ var (
 
 type config struct {
 	// General application behavior
-	ConfigFile         string `short:"C" long:"configfile" description:"Path to configuration file"`
-	ShowVersion        bool   `short:"V" long:"version" description:"Display version information and exit"`
-	TestNet            bool   `long:"testnet" description:"Use the test network (default mainnet)"`
-	SimNet             bool   `long:"simnet" description:"Use the simulation test network (default mainnet)"`
-	DebugLevel         string `short:"d" long:"debuglevel" description:"Logging level {trace, debug, info, warn, error, critical}"`
-	LogDir             string `long:"logdir" description:"Directory to log output"`
-	NoCollectBlockData bool   `long:"noblockdata" description:"Collect block data (default true)"`
-	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Collect stake info (default true). Requires wallet connection"`
+	ConfigFile  string `short:"C" long:"configfile" description:"Path to configuration file"`
+	ShowVersion bool   `short:"V" long:"version" description:"Display version information and exit"`
+	TestNet     bool   `long:"testnet" description:"Use the test network (default mainnet)"`
+	SimNet      bool   `long:"simnet" description:"Use the simulation test network (default mainnet)"`
+	DebugLevel  string `short:"d" long:"debuglevel" description:"Logging level {trace, debug, info, warn, error, critical}"`
+	Quiet       bool   `short:"q" long:"quiet" description:"Easy way to set debuglevel to error"`
+	LogDir      string `long:"logdir" description:"Directory to log output"`
+
+	// Data I/O
+	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
+	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
+	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
+	OutFolder          string `short:"f" long:"outfolder" description:"Folder for file outputs"`
+
+	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
+	SaveJSONStdout bool `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
+	SaveJSONFile   bool `short:"j" long:"save-jsonfile" description:"Save JSON-formatted data to file"`
+	//SaveMongoDB        bool    `short:"g" long:"save-mongo" description:"Save data to MongoDB"`
+	//SaveMySQL          bool    `short:"q" long:"save-mysql" description:"Save data to MySQL"`
 
 	// RPC client options
 	DcrdUser         string `long:"dcrduser" description:"Daemon RPC user name"`
@@ -79,6 +93,7 @@ var (
 		DebugLevel:    defaultLogLevel,
 		ConfigFile:    defaultConfigFile,
 		LogDir:        defaultLogDir,
+		OutFolder:     defaultOutputDir,
 		DcrdCert:      defaultDaemonRPCCertFile,
 		DcrwCert:      defaultWalletRPCCertFile,
 		AccountName:   defaultAccountName,
@@ -99,6 +114,9 @@ func cleanAndExpandPath(path string) string {
 	// NOTE: The os.ExpandEnv doesn't work with Windows cmd.exe-style
 	// %VARIABLE%, but they variables can still be expanded via POSIX-style
 	// $VARIABLE.
+	// So, replace any %VAR% with ${VAR}
+	r := regexp.MustCompile(`%(?P<VAR>[^%/\\]*)%`)
+	path = r.ReplaceAllString(path,"$${${VAR}}")
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
@@ -221,7 +239,7 @@ func loadConfig() (*config, error) {
 	appName := filepath.Base(os.Args[0])
 	appName = strings.TrimSuffix(appName, filepath.Ext(appName))
 	if preCfg.ShowVersion {
-		fmt.Println(appName, "version", currentVersion)
+		fmt.Println(appName, "version", ver.String())
 		os.Exit(0)
 	}
 
@@ -286,6 +304,10 @@ func loadConfig() (*config, error) {
 		cfg.DcrwServ = defaultHost + ":" + activeNet.RPCServerPort
 	}
 
+	// Output folder
+	cfg.OutFolder = cleanAndExpandPath(cfg.OutFolder)
+	cfg.OutFolder = filepath.Join(cfg.OutFolder, activeNet.Name)
+
 	// The HTTP server port can not be beyond a uint16's size in value.
 	// if cfg.HttpSvrPort > 0xffff {
 	// 	str := "%s: Invalid HTTP port number for HTTP server"
@@ -311,6 +333,9 @@ func loadConfig() (*config, error) {
 	setLogLevels(defaultLogLevel)
 
 	// Parse, validate, and set debug log level(s).
+	if cfg.Quiet {
+		cfg.DebugLevel = "error"
+	}
 	if err := parseAndSetDebugLevels(cfg.DebugLevel); err != nil {
 		err := fmt.Errorf("%s: %v", "loadConfig", err.Error())
 		fmt.Fprintln(os.Stderr, err)
@@ -318,7 +343,8 @@ func loadConfig() (*config, error) {
 		return loadConfigError(err)
 	}
 
-	//csvPath = cfg.HttpUIPath
+	log.Debugf("Output folder: %v",cfg.OutFolder)
+	log.Debugf("Log folder: %v",cfg.LogDir)
 
 	return &cfg, nil
 }
