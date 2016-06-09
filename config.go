@@ -23,7 +23,7 @@ const (
 	defaultLogLevel       = "info"
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "dcrspy.log"
-	currentVersion        = 1
+	currentVersion        = "0.0.2"
 )
 
 var curDir, _ = os.Getwd()
@@ -48,14 +48,22 @@ var (
 
 type config struct {
 	// General application behavior
-	ConfigFile         string `short:"C" long:"configfile" description:"Path to configuration file"`
-	ShowVersion        bool   `short:"V" long:"version" description:"Display version information and exit"`
-	TestNet            bool   `long:"testnet" description:"Use the test network (default mainnet)"`
-	SimNet             bool   `long:"simnet" description:"Use the simulation test network (default mainnet)"`
-	DebugLevel         string `short:"d" long:"debuglevel" description:"Logging level {trace, debug, info, warn, error, critical}"`
-	LogDir             string `long:"logdir" description:"Directory to log output"`
-	NoCollectBlockData bool   `long:"noblockdata" description:"Collect block data (default true)"`
-	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Collect stake info (default true). Requires wallet connection"`
+	ConfigFile  string `short:"C" long:"configfile" description:"Path to configuration file"`
+	ShowVersion bool   `short:"V" long:"version" description:"Display version information and exit"`
+	TestNet     bool   `long:"testnet" description:"Use the test network (default mainnet)"`
+	SimNet      bool   `long:"simnet" description:"Use the simulation test network (default mainnet)"`
+	DebugLevel  string `short:"d" long:"debuglevel" description:"Logging level {trace, debug, info, warn, error, critical}"`
+	LogDir      string `long:"logdir" description:"Directory to log output"`
+
+	// Data I/O
+	NoCollectBlockData bool `long:"noblockdata" description:"Do not collect block data (default false)"`
+	NoCollectStakeInfo bool `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
+
+	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
+	SaveJSONStdout bool `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
+	SaveJSONFile   bool `short:"f" long:"save-jsonfile" description:"Save JSON-formatted data to file"`
+	//SaveMongoDB        bool    `short:"g" long:"save-mongo" description:"Save data to MongoDB"`
+	//SaveMySQL          bool    `short:"q" long:"save-mysql" description:"Save data to MySQL"`
 
 	// RPC client options
 	DcrdUser         string `long:"dcrduser" description:"Daemon RPC user name"`

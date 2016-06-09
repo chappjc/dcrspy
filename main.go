@@ -196,8 +196,30 @@ func main() {
 
 	// WaitGroup for the chainMonitor and stakeMonitor
 	var wg sync.WaitGroup
-	// saver mutex, in case we want to share the same underlying output resource
+	// Saver mutex, to share the same underlying output resource between block
+	// and stake info data savers
 	saverMutex := new(sync.Mutex)
+
+	var blockDataSavers []BlockDataSaver
+	var stakeInfoDataSavers []StakeInfoDataSaver
+	if cfg.SaveJSONStdout {
+		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
+		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
+	}
+	if cfg.SaveJSONFile {
+		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONFiles("block_data-", saverMutex))
+		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONFiles("stake-info-", saverMutex))
+	}
+
+	// If no savers specified, enable summary output
+	if len(blockDataSavers) == 0 {
+		cfg.SummaryOut = true
+	}
+
+	if cfg.SummaryOut {
+		blockDataSavers = append(blockDataSavers, NewBlockDataToSummaryStdOut(saverMutex))
+		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToSummaryStdOut(saverMutex))
+	}
 
 	// Block data collector
 	var collector *blockDataCollector
@@ -211,11 +233,8 @@ func main() {
 
 		// Blockchain monitor for the collector
 		// if collector is nil, so is connectChan
-		//stdoutBlockDataSaver := &BlockDataToJSONStdOut{}
-		//stdoutBlockDataSaver := NewBlockDataToJSONStdOut(saverMutex)
-		fileBlockDataSaver := NewBlockDataToJSONFiles("block_data-", saverMutex)
 		wsChainMonitor := newChainMonitor(collector, connectChan,
-			fileBlockDataSaver, quit, &wg)
+			blockDataSavers, quit, &wg)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -230,11 +249,8 @@ func main() {
 		}
 
 		// Stake info monitor for the stakeCollector
-		//stdoutStakeInfoSaver := &StakeInfoDataToJSONStdOut{}
-		//stdoutStakeInfoSaver := NewStakeInfoDataToJSONStdOut(saverMutex)
-		fileStakeInfoSaver := NewStakeInfoDataToJSONFiles("stake-info-", saverMutex)
 		wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
-			fileStakeInfoSaver, quit, &wg)
+			stakeInfoDataSavers, quit, &wg)
 		go wsStakeInfoMonitor.blockConnectedHandler()
 	}
 
@@ -247,7 +263,7 @@ func main() {
 					log.Infof("Stake difficulty channel closed")
 					return
 				}
-				log.Infof("Got stake difficulty change notification (%v). "+
+				log.Debugf("Got stake difficulty change notification (%v). "+
 					" Doing nothing for now.", s)
 			case <-quit:
 				log.Infof("Quitting getstakeinfo handler.")

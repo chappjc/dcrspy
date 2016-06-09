@@ -17,6 +17,12 @@ import (
 	//"github.com/decred/dcrutil"
 )
 
+type fileSaver struct {
+	nameBase string
+	file     os.File
+	mtx      *sync.Mutex
+}
+
 // BlockDataSaver is an interface for saving/storing blockData
 type BlockDataSaver interface {
 	Store(data *blockData) error
@@ -28,12 +34,16 @@ type BlockDataToJSONStdOut struct {
 	mtx *sync.Mutex
 }
 
+// BlockDataToSummaryStdOut implements BlockDataSaver interface for plain text
+// summary to stdout
+type BlockDataToSummaryStdOut struct {
+	mtx *sync.Mutex
+}
+
 // BlockDataToJSONFiles implements BlockDataSaver interface for JSON output to
 // the file system
 type BlockDataToJSONFiles struct {
-	nameBase string
-	file     os.File
-	mtx      *sync.Mutex
+	fileSaver
 }
 
 // BlockDataToMySQL implements BlockDataSaver interface for output to a
@@ -54,6 +64,18 @@ func NewBlockDataToJSONStdOut(m ...*sync.Mutex) *BlockDataToJSONStdOut {
 	return &BlockDataToJSONStdOut{}
 }
 
+// NewBlockDataToSummaryStdOut creates a new BlockDataToJSONStdOut with optional
+// existing mutex
+func NewBlockDataToSummaryStdOut(m ...*sync.Mutex) *BlockDataToSummaryStdOut {
+	if len(m) > 1 {
+		panic("Too many inputs.")
+	}
+	if len(m) > 0 {
+		return &BlockDataToSummaryStdOut{m[0]}
+	}
+	return &BlockDataToSummaryStdOut{}
+}
+
 // NewBlockDataToJSONFiles creates a new BlockDataToJSONFiles with optional
 // existing mutex
 func NewBlockDataToJSONFiles(fileBase string, m ...*sync.Mutex) *BlockDataToJSONFiles {
@@ -69,9 +91,11 @@ func NewBlockDataToJSONFiles(fileBase string, m ...*sync.Mutex) *BlockDataToJSON
 	}
 
 	return &BlockDataToJSONFiles{
-		nameBase: fileBase,
-		file:     os.File{},
-		mtx:      mtx,
+		fileSaver: fileSaver{
+			nameBase: fileBase,
+			file:     os.File{},
+			mtx:      mtx,
+		},
 	}
 }
 
@@ -92,6 +116,26 @@ func (s *BlockDataToJSONStdOut) Store(data *blockData) error {
 	fmt.Printf("\n--- BEGIN blockData JSON ---\n")
 	_, err = writeFormattedJSONBlockData(jsonConcat, os.Stdout)
 	fmt.Printf("--- END blockData JSON ---\n\n")
+
+	return err
+}
+
+// Store writes blockData to stdout as plain text summary
+func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
+	if s.mtx != nil {
+		s.mtx.Lock()
+		defer s.mtx.Unlock()
+	}
+
+	_, err := fmt.Printf("Stake difficulty: %.3f (current block) -> %.3f (next block)\n",
+		data.currentstakediff.CurrentStakeDifficulty,
+		data.currentstakediff.NextStakeDifficulty)
+
+	_, err = fmt.Printf("Next price window: %.3f [%.2f, %.2f] (est, [min, max])\n",
+		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
+
+	_, err = fmt.Printf("Ticket pool: %v (size), %.3f (avg. price), %.2f (total DCR staked)\n",
+		data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
 
 	return err
 }
@@ -192,12 +236,16 @@ type StakeInfoDataToJSONStdOut struct {
 	mtx *sync.Mutex
 }
 
+// StakeInfoDataToSummaryStdOut implements StakeInfoDataSaver interface for
+// plain text summary to stdout
+type StakeInfoDataToSummaryStdOut struct {
+	mtx *sync.Mutex
+}
+
 // StakeInfoDataToJSONFiles implements StakeInfoDataSaver interface for JSON
 // output to the file system
 type StakeInfoDataToJSONFiles struct {
-	nameBase string
-	file     os.File
-	mtx      *sync.Mutex
+	fileSaver
 }
 
 // StakeInfoDataToMySQL implements StakeInfoDataSaver interface for output to a
@@ -218,6 +266,18 @@ func NewStakeInfoDataToJSONStdOut(m ...*sync.Mutex) *StakeInfoDataToJSONStdOut {
 	return &StakeInfoDataToJSONStdOut{}
 }
 
+// NewStakeInfoDataToSummaryStdOut creates a new StakeInfoDataToSummaryStdOut with optional
+// existing mutex
+func NewStakeInfoDataToSummaryStdOut(m ...*sync.Mutex) *StakeInfoDataToSummaryStdOut {
+	if len(m) > 1 {
+		panic("Too many inputs.")
+	}
+	if len(m) > 0 {
+		return &StakeInfoDataToSummaryStdOut{m[0]}
+	}
+	return &StakeInfoDataToSummaryStdOut{}
+}
+
 // NewStakeInfoDataToJSONFiles creates a new StakeInfoDataToJSONFiles with optional
 // existing mutex
 func NewStakeInfoDataToJSONFiles(fileBase string, m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
@@ -233,9 +293,11 @@ func NewStakeInfoDataToJSONFiles(fileBase string, m ...*sync.Mutex) *StakeInfoDa
 	}
 
 	return &StakeInfoDataToJSONFiles{
-		nameBase: fileBase,
-		file:     os.File{},
-		mtx:      mtx,
+		fileSaver: fileSaver{
+			nameBase: fileBase,
+			file:     os.File{},
+			mtx:      mtx,
+		},
 	}
 }
 
@@ -255,6 +317,29 @@ func (s *StakeInfoDataToJSONStdOut) Store(data *stakeInfoData) error {
 	fmt.Printf("\n--- BEGIN stakeInfoData JSON ---\n")
 	fmt.Println(jsonConcat.String())
 	fmt.Printf("--- END stakeInfoData JSON ---\n\n")
+
+	return err
+}
+
+// Store writes stakeInfoData to stdout as plain text summary
+func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
+	if s.mtx != nil {
+		s.mtx.Lock()
+		defer s.mtx.Unlock()
+	}
+
+	_, err := fmt.Printf("Tickets: %v (immature), %v (live), %v/%v (missed/revoked)\n",
+		data.stakeinfo.Immature, data.stakeinfo.Live, data.stakeinfo.Missed,
+		data.stakeinfo.Revoked)
+
+	_, err = fmt.Printf("mempool tickets: %v (all), %v (own)\n",
+		data.stakeinfo.AllMempoolTix, data.stakeinfo.OwnMempoolTix)
+
+	_, err = fmt.Printf("Ticket Price: %.3f, Block in window: %v / 144, Window Number: %v\n",
+		data.stakeinfo.Difficulty, data.idxBlockInWindow, data.priceWindowNum)
+
+	_, err = fmt.Printf("History: %v votes, %.2f cumulative subsidy\n",
+		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
 
 	return err
 }
