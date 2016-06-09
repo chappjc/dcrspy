@@ -92,7 +92,7 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 		height:           height,
 		stakeinfo:        getStakeInfoRes,
 		priceWindowNum:   int(height / winSize),
-		idxBlockInWindow: int(height % winSize),
+		idxBlockInWindow: int(height % winSize) + 1,
 	}
 
 	return stakeinfo, err
@@ -248,7 +248,7 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 		eststakediff:     *estStakeDiff,
 		poolinfo:         tiketPoolInfo,
 		priceWindowNum:   int(height / winSize),
-		idxBlockInWindow: int(height % winSize),
+		idxBlockInWindow: int(height % winSize) + 1,
 	}
 
 	return blockdata, err

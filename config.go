@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 
@@ -23,7 +24,7 @@ const (
 	defaultLogLevel       = "info"
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "dcrspy.log"
-	defaultOutputDirname  = "data"
+	defaultOutputDirname  = "spydata"
 	currentVersion        = "0.0.2"
 )
 
@@ -113,6 +114,9 @@ func cleanAndExpandPath(path string) string {
 	// NOTE: The os.ExpandEnv doesn't work with Windows cmd.exe-style
 	// %VARIABLE%, but they variables can still be expanded via POSIX-style
 	// $VARIABLE.
+	// So, replace any %VAR% with ${VAR}
+	r := regexp.MustCompile(`%(?P<VAR>[^%/\\]*)%`)
+	path = r.ReplaceAllString(path,"$${${VAR}}")
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
@@ -339,7 +343,8 @@ func loadConfig() (*config, error) {
 		return loadConfigError(err)
 	}
 
-	//csvPath = cfg.HttpUIPath
+	log.Debugf("Output folder: %v",cfg.OutFolder)
+	log.Debugf("Log folder: %v",cfg.LogDir)
 
 	return &cfg, nil
 }
