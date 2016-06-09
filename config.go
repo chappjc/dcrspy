@@ -25,7 +25,6 @@ const (
 	defaultLogDirname     = "logs"
 	defaultLogFilename    = "dcrspy.log"
 	defaultOutputDirname  = "spydata"
-	currentVersion        = "0.0.2"
 )
 
 var curDir, _ = os.Getwd()
@@ -116,7 +115,7 @@ func cleanAndExpandPath(path string) string {
 	// $VARIABLE.
 	// So, replace any %VAR% with ${VAR}
 	r := regexp.MustCompile(`%(?P<VAR>[^%/\\]*)%`)
-	path = r.ReplaceAllString(path,"$${${VAR}}")
+	path = r.ReplaceAllString(path, "$${${VAR}}")
 	return filepath.Clean(os.ExpandEnv(path))
 }
 
@@ -343,8 +342,8 @@ func loadConfig() (*config, error) {
 		return loadConfigError(err)
 	}
 
-	log.Debugf("Output folder: %v",cfg.OutFolder)
-	log.Debugf("Log folder: %v",cfg.LogDir)
+	log.Debugf("Output folder: %v", cfg.OutFolder)
+	log.Debugf("Log folder: %v", cfg.LogDir)
 
 	return &cfg, nil
 }
