@@ -49,6 +49,15 @@ func newStakeInfoDataCollector(cfg *config,
 	}, nil
 }
 
+func (t stakeInfoDataCollector) getHeight() (uint32, error) {
+	// block height
+	blockCount, err := t.dcrdChainSvr.GetBlockCount()
+	if err != nil {
+		return 0, err
+	}
+	return uint32(blockCount), nil
+}
+
 // collect is the main handler for collecting chain data
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	winSize := uint32(activeNet.StakeDiffWindowSize)

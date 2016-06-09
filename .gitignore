@@ -28,3 +28,4 @@ debug
 dcrspy.conf
 logs
 .vscode
+data/*

@@ -12,12 +12,14 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"sync"
 	//"github.com/decred/dcrd/dcrjson"
 	//"github.com/decred/dcrutil"
 )
 
 type fileSaver struct {
+	folder   string
 	nameBase string
 	file     os.File
 	mtx      *sync.Mutex
@@ -78,7 +80,7 @@ func NewBlockDataToSummaryStdOut(m ...*sync.Mutex) *BlockDataToSummaryStdOut {
 
 // NewBlockDataToJSONFiles creates a new BlockDataToJSONFiles with optional
 // existing mutex
-func NewBlockDataToJSONFiles(fileBase string, m ...*sync.Mutex) *BlockDataToJSONFiles {
+func NewBlockDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex) *BlockDataToJSONFiles {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
@@ -92,6 +94,7 @@ func NewBlockDataToJSONFiles(fileBase string, m ...*sync.Mutex) *BlockDataToJSON
 
 	return &BlockDataToJSONFiles{
 		fileSaver: fileSaver{
+			folder:   folder,
 			nameBase: fileBase,
 			file:     os.File{},
 			mtx:      mtx,
@@ -127,14 +130,22 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 		defer s.mtx.Unlock()
 	}
 
-	_, err := fmt.Printf("Stake difficulty: %.3f (current block) -> %.3f (next block)\n",
+	fmt.Printf("\nBlock %v:\n", data.header.Height)
+
+	_, err := fmt.Printf("\tStake difficulty: %.3f -> %.3f (current -> next block)\n",
 		data.currentstakediff.CurrentStakeDifficulty,
 		data.currentstakediff.NextStakeDifficulty)
 
-	_, err = fmt.Printf("Next price window: %.3f [%.2f, %.2f] (est, [min, max])\n",
+	_, err = fmt.Printf("\tEstimated price in next window: %.3f / [%.2f, %.2f] ([min, max])\n",
 		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
+	_, err = fmt.Printf("\tWindow progress: %v / 144, Window number: %v\n",
+		data.idxBlockInWindow, data.priceWindowNum)
 
-	_, err = fmt.Printf("Ticket pool: %v (size), %.3f (avg. price), %.2f (total DCR staked)\n",
+	_, err = fmt.Printf("\tTicket fees: mean = %.4f, median = %.4f, std = %.4f, N=%d\n",
+		data.feeinfo.Mean, data.feeinfo.Median, data.feeinfo.StdDev,
+		data.feeinfo.Number)
+
+	_, err = fmt.Printf("\tTicket pool: %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
 		data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
 
 	return err
@@ -157,8 +168,13 @@ func (s *BlockDataToJSONFiles) Store(data *blockData) error {
 	// Write JSON to a file with block height in the name
 	height := data.header.Height
 	fname := fmt.Sprintf("%s%d.json", s.nameBase, height)
-	fp, err := os.Create(fname)
+	fullfile := filepath.Join(s.folder, fname)
+	fp, err := os.Create(fullfile)
 	defer fp.Close()
+	if err != nil {
+		log.Errorf("Unable to open file %v for writting.", fullfile)
+		return err
+	}
 
 	s.file = *fp
 	_, err = writeFormattedJSONBlockData(jsonConcat, &s.file)
@@ -280,7 +296,7 @@ func NewStakeInfoDataToSummaryStdOut(m ...*sync.Mutex) *StakeInfoDataToSummarySt
 
 // NewStakeInfoDataToJSONFiles creates a new StakeInfoDataToJSONFiles with optional
 // existing mutex
-func NewStakeInfoDataToJSONFiles(fileBase string, m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
+func NewStakeInfoDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
@@ -294,6 +310,7 @@ func NewStakeInfoDataToJSONFiles(fileBase string, m ...*sync.Mutex) *StakeInfoDa
 
 	return &StakeInfoDataToJSONFiles{
 		fileSaver: fileSaver{
+			folder:   folder,
 			nameBase: fileBase,
 			file:     os.File{},
 			mtx:      mtx,
@@ -328,18 +345,21 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 		defer s.mtx.Unlock()
 	}
 
-	_, err := fmt.Printf("Tickets: %v (immature), %v (live), %v/%v (missed/revoked)\n",
-		data.stakeinfo.Immature, data.stakeinfo.Live, data.stakeinfo.Missed,
-		data.stakeinfo.Revoked)
+	fmt.Printf("\nStake Info at Height %v:\n", data.height)
 
-	_, err = fmt.Printf("mempool tickets: %v (all), %v (own)\n",
+	_, err := fmt.Printf("\tMined tickets: %v (immature), %v (live)\n",
+		data.stakeinfo.Immature, data.stakeinfo.Live)
+
+	_, err = fmt.Printf("\tmempool tickets: %v (all), %v (own)\n",
 		data.stakeinfo.AllMempoolTix, data.stakeinfo.OwnMempoolTix)
 
-	_, err = fmt.Printf("Ticket Price: %.3f, Block in window: %v / 144, Window Number: %v\n",
+	_, err = fmt.Printf("\tTicket price: %.3f, Window progress: %v / 144, Window number: %v\n",
 		data.stakeinfo.Difficulty, data.idxBlockInWindow, data.priceWindowNum)
 
-	_, err = fmt.Printf("History: %v votes, %.2f cumulative subsidy\n",
+	_, err = fmt.Printf("\tTotals: %v votes, %.2f DCR subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
+	_, err = fmt.Printf("\t        %v missed, %v revoked\n\n",
+		data.stakeinfo.Missed, data.stakeinfo.Revoked)
 
 	return err
 }
@@ -361,8 +381,13 @@ func (s *StakeInfoDataToJSONFiles) Store(data *stakeInfoData) error {
 	// Write JSON to a file with block height in the name
 	height := data.height
 	fname := fmt.Sprintf("%s%d.json", s.nameBase, height)
-	fp, err := os.Create(fname)
+	fullfile := filepath.Join(s.folder, fname)
+	fp, err := os.Create(fullfile)
 	defer fp.Close()
+	if err != nil {
+		log.Errorf("Unable to open file %v for writting.", fullfile)
+		return err
+	}
 
 	s.file = *fp
 	//_, err = writeFormattedJSONStakeInfoData(jsonConcat, &s.file)
