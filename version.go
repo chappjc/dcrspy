@@ -12,7 +12,7 @@ var ver = version{
 	Major: 0,
 	Minor: 0,
 	Patch: 2,
-	Label: "alpha",
+	Label: "alpha_1",
 	Nick:  "Jack Bauer"}
 
 // CommitHash may be set on the build command line:

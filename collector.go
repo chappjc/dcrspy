@@ -24,10 +24,23 @@ import (
 	"github.com/decred/dcrutil"
 )
 
+// WalletBalances contains various wallet balances in coins
+type WalletBalances struct {
+	AllAllAcounts           float64 `json:"allallacounts"`
+	AllDefaultAcount        float64 `json:"alldefaultacount"`
+	SpendableAllAccounts    float64 `json:"spendableallaccounts"`
+	SpendableDefaultAccount float64 `json:"spendabledefaultaccount"`
+	LockedAllAccounts       float64 `json:"lockedallaccounts"`
+	LockedImportedAccount   float64 `json:"lockedimportedaccount"`
+	LockedDefaultAccount    float64 `json:"lockeddefaultaccount"`
+}
+
 // stakeInfoData
 type stakeInfoData struct {
 	height           uint32
+	walletInfo       *dcrjson.WalletInfoResult
 	stakeinfo        *dcrjson.GetStakeInfoResult
+	balances         *WalletBalances
 	priceWindowNum   int // trivia
 	idxBlockInWindow int // Relative block index within the difficulty period
 }
@@ -62,9 +75,14 @@ func (t stakeInfoDataCollector) getHeight() (uint32, error) {
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	winSize := uint32(activeNet.StakeDiffWindowSize)
 
+	// Client pointer, simply named
+	wallet := t.dcrwChainSvr
+
 	// Make sure that our wallet is connected to the daemon.
-	if t.dcrwChainSvr != nil {
-		walletInfo, err := t.dcrwChainSvr.WalletInfo()
+	var err error
+	var walletInfo *dcrjson.WalletInfoResult
+	if wallet != nil {
+		walletInfo, err = wallet.WalletInfo()
 		if err != nil {
 			return nil, err
 		}
@@ -82,15 +100,37 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 	// height := uint32(blockCount)
 
 	// Stake Info
-	getStakeInfoRes, err := t.dcrwChainSvr.GetStakeInfo()
+	getStakeInfoRes, err := wallet.GetStakeInfo()
 	if err != nil {
 		return nil, err
+	}
+
+	balAllAll, err := wallet.GetBalanceMinConfType("*", 0, "all")
+	balAllDefault, err := wallet.GetBalanceMinConfType("default", 0, "all")
+
+	balSpendableAll, err := wallet.GetBalance("*")
+	balSpendableDefault, err := wallet.GetBalance("default")
+
+	balLockedAll, err := wallet.GetBalanceMinConfType("*", 0, "locked")
+	balLockedDefault, err := wallet.GetBalanceMinConfType("default", 0, "locked")
+	balLockedImported, err := wallet.GetBalanceMinConfType("imported", 0, "locked")
+
+	balances := &WalletBalances{
+		AllAllAcounts:           balAllAll.ToCoin(),
+		AllDefaultAcount:        balAllDefault.ToCoin(),
+		SpendableAllAccounts:    balSpendableAll.ToCoin(),
+		SpendableDefaultAccount: balSpendableDefault.ToCoin(),
+		LockedAllAccounts:       balLockedAll.ToCoin(),
+		LockedImportedAccount:   balLockedImported.ToCoin(),
+		LockedDefaultAccount:    balLockedDefault.ToCoin(),
 	}
 
 	// Output
 	stakeinfo := &stakeInfoData{
 		height:           height,
+		walletInfo:       walletInfo,
 		stakeinfo:        getStakeInfoRes,
+		balances:         balances,
 		priceWindowNum:   int(height / winSize),
 		idxBlockInWindow: int(height%winSize) + 1,
 	}

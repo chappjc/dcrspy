@@ -139,7 +139,7 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 
 	_, err = fmt.Printf("\tEstimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
 		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
-	_, err = fmt.Printf("\tWindow progress:    %3d / 144   |     Window number: %v\n",
+	_, err = fmt.Printf("\tWindow progress:   %3d / 144  of price window number %v\n",
 		data.idxBlockInWindow, data.priceWindowNum)
 
 	_, err = fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
@@ -346,24 +346,47 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 		defer s.mtx.Unlock()
 	}
 
-	fmt.Printf("\nStake Info at Height %v:\n", data.height)
+	fmt.Printf("\nWallet and Stake Info at Height %v:\n", data.height)
 
-	var err error
-	_, err = fmt.Printf("\tMined tickets:    %5d (immature), %7d (live)\n",
+	fmt.Println("- Balances")
+	fmt.Printf("\tBalances (spendable):  %9.4f (default), %9.4f (all)\n",
+		data.balances.SpendableDefaultAccount,
+		data.balances.SpendableAllAccounts)
+	fmt.Printf("\tBalances (locked):     %9.4f (default), %9.4f (all), %9.4f (imported)\n",
+		data.balances.LockedDefaultAccount,
+		data.balances.LockedAllAccounts,
+		data.balances.LockedImportedAccount)
+	fmt.Printf("\tBalances (any):        %9.4f (default), %9.4f (all)\n",
+		data.balances.AllDefaultAcount, data.balances.AllAllAcounts)
+
+	// _, err = fmt.Printf("\tBalances (all accounts):    %5.4f (S), %5.4f (L), %5.4d (A)\n",
+	// 	data.balances.spendableAllAccounts, data.balances.lockedAllAccounts,
+	// 	data.balances.allAllAcounts)
+	// _, err = fmt.Printf("\tBalances (default):    %5.4f (S), %5.4f (L), %5.4d (A)\n",
+	// 	data.balances.spendableDefaultAccount, data.balances.lockedDefaultAccount,
+	// 	data.balances.allDefaultAcount)
+
+	fmt.Println("- Stake Info")
+	fmt.Printf("        ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
+		data.walletInfo.StakeMining, data.walletInfo.Unlocked)
+	fmt.Printf("\tMined tickets:    %5d (immature), %7d (live)\n",
 		data.stakeinfo.Immature, data.stakeinfo.Live)
 
-	_, err = fmt.Printf("\tmempool tickets:  %5d (own),      %7d (all)\n",
+	fmt.Printf("\tmempool tickets:  %5d (own),      %7d (all)\n",
 		data.stakeinfo.OwnMempoolTix, data.stakeinfo.AllMempoolTix)
 
-	_, err = fmt.Printf("\tTicket price:    %8.3f  |    Window progress: %v / 144\n",
+	fmt.Printf("\tTicket price:    %8.3f  |    Window progress: %v / 144\n",
 		data.stakeinfo.Difficulty, data.idxBlockInWindow)
 
-	_, err = fmt.Printf("\tTotals: %10d  votes,  %9.2f subsidy\n",
+	fmt.Printf("\tWallet's price:  %10.05f;  fee:   %.4f / KiB\n",
+		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)
+
+	fmt.Printf("\tTotals: %10d  votes,  %9.2f subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
-	_, err = fmt.Printf("\t        %10d missed,  %9d revoked\n\n",
+	fmt.Printf("\t        %10d missed,  %9d revoked\n\n",
 		data.stakeinfo.Missed, data.stakeinfo.Revoked)
 
-	return err
+	return nil
 }
 
 // Store writes stakeInfoData to a file in JSON format
@@ -408,10 +431,23 @@ func JSONFormatStakeInfoData(data *stakeInfoData) (*bytes.Buffer, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	jsonAll.Write(stakeInfoJSON)
 	//stakeInfoJSON, err := json.MarshalIndent(data.stakeinfo, "", "    ")
 	//fmt.Println(string(stakeInfoJSON))
+
+	jsonAll.WriteString(",\"walletinfo\": ")
+	walletInfoJSON, err := json.Marshal(data.walletInfo)
+	if err != nil {
+		return nil, err
+	}
+	jsonAll.Write(walletInfoJSON)
+
+	jsonAll.WriteString(",\"balances\": ")
+	balancesJSON, err := json.Marshal(data.balances)
+	if err != nil {
+		return nil, err
+	}
+	jsonAll.Write(balancesJSON)
 
 	jsonAll.WriteString("}")
 

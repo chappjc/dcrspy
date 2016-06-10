@@ -311,7 +311,7 @@ func main() {
 				log.Debugf("Got stake difficulty change notification (%v). "+
 					" Doing nothing for now.", s)
 			case <-quit:
-				log.Infof("Quitting getstakeinfo handler.")
+				log.Debugf("Quitting OnStakeDifficulty handler.")
 				return
 			}
 		}
