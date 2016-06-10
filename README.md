@@ -111,7 +111,7 @@ Quick tips:
 * Stay connected and monitor for new blocks, writting:
   * Plain text summary to stdout, with `-s, --summary`. 
   * JSON to stdout, with `-o, --save-jsonstdout`.
-  * JSON to file system, with `-o, --save-jsonfile`.
+  * JSON to file system, with `-j, --save-jsonfile`.
 * To monitor only block data (no wallet connection), use `--nostakeinfo`.
 
 The full list of command line switches is below.
