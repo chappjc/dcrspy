@@ -7,12 +7,6 @@
 //	1. Block chain data (from dcrd)
 //  2. Stake information (from your wallet)
 //
-// Multiple destinations for the data are planned:
-//	1. stdout.  JSON-formatted data is send to stdout. IMPLEMENTED.
-//	2. File system.  JSON-formatted data is written to the file system.
-//	   NOT YET IMPLEMENTED.
-//  3. Database. Data is inserted into a MySQL database.  NOT YET IMPLEMENTED.
-//
 // See README.md and TODO for more information.
 //
 // by Jonathan Chappelow (chappjc)
@@ -59,6 +53,7 @@ func main() {
 
 	log.Infof(appName+" version %s", ver.String())
 
+	// Create data output folder if it does not already exist
 	err = os.MkdirAll(cfg.OutFolder, 0755)
 	if err != nil {
 		fmt.Printf("Failed to create data output folder %s. Error: %s\n",
@@ -70,6 +65,11 @@ func main() {
 	// notification handler to deliver blocks through a channel.
 	var connectChan chan int32
 	var stakeDiffChan chan int64
+	// If we're monitoring for blocks OR collecting block data, these channels
+	// are necessary to handle new block notifications. Otherwise, leave them
+	// as nil so that both a send (below) blocks and a receive (in spy.go,
+	// blockConnectedHandler) block. default case makes non-blocking below.
+	// quit channel case manages blockConnectedHandlers.
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		connectChan = make(chan int32, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
@@ -79,24 +79,24 @@ func main() {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
 	}
 
-	cmdName := cfg.CmdName // "ping"
-	args := cfg.CmdArgs    // "127.0.0.1,-n-8"
+	cmdName := cfg.CmdName // e.g. "ping"
+	args := cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
 
 	ntfnHandlersDaemon := dcrrpcclient.NotificationHandlers{
 		OnBlockConnected: func(hash *chainhash.Hash, height int32,
 			time time.Time, vb uint16) {
 			select {
 			case connectChan <- height:
-				var argSubst bytes.Buffer
 				// replace %h and %n with hash and block height, resp.
 				rep := strings.NewReplacer("%h", hash.String(), "%n", strconv.Itoa(int(height)))
+				var argSubst bytes.Buffer
 				rep.WriteString(&argSubst, args)
 
 				// Split the argument string by comma
-				argsSl := strings.Split(argSubst.String(), ",")
+				argsSplit := strings.Split(argSubst.String(), ",")
 
 				// Create command, with substituted args
-				cmd := exec.Command(cmdName, argsSl...)
+				cmd := exec.Command(cmdName, argsSplit...)
 				// Get a pipe for stdout
 				outpipe, err := cmd.StdoutPipe()
 				if err != nil {
@@ -105,12 +105,14 @@ func main() {
 				// Send stderr to the same place
 				cmd.Stderr = cmd.Stdout
 
-				fmt.Println(cmd.Path, strings.Join(argsSl, " "))
+				// Display the full command being executed
+				fmt.Println(cmd.Path, strings.Join(argsSplit, " "))
 
-				// Channel for logger and command execution routines
+				// Channel for logger and command execution routines to talk
 				cmdDone := make(chan error)
 				go execLogger(outpipe, cmdDone)
 
+				// Start command and return from handler without waiting
 				go func() {
 					if err := cmd.Run(); err != nil {
 						log.Errorf("Failed to start system command %v. Error: %v",
@@ -139,6 +141,9 @@ func main() {
 		},
 	}
 
+	// Daemon client connection
+
+	// dcrd rpc.cert
 	var dcrdCerts []byte
 	if !cfg.DisableClientTLS {
 		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
@@ -161,11 +166,20 @@ func main() {
 		Certificates: dcrdCerts,
 		DisableTLS:   cfg.DisableClientTLS,
 	}
+
 	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, &ntfnHandlersDaemon)
 	if err != nil {
 		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
 		os.Exit(1)
 	}
+
+	// Display connected network
+	net, err := dcrdClient.GetCurrentNet()
+	if err != nil {
+		fmt.Printf("Unable to get current network from dcrd: %s\n", err.Error())
+		os.Exit(1)
+	}
+	log.Debugf("Connected to dcrd on network: %v", net.String())
 
 	// Register for block connection notifications.
 	if err := dcrdClient.NotifyBlocks(); err != nil {
@@ -181,9 +195,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Wallet
+
 	var dcrwClient *dcrrpcclient.Client
 	if !cfg.NoCollectStakeInfo {
-		// Connect to the dcrwallet server RPC client.
+		// dcrwallet rpc.cert
 		var dcrwCerts []byte
 		if !cfg.DisableClientTLS {
 			dcrwCerts, err = ioutil.ReadFile(cfg.DcrwCert)
@@ -223,7 +239,7 @@ func main() {
 	c := make(chan os.Signal, 1)
 	signal.Notify(c, os.Interrupt)
 
-	// Start waiting for the signal
+	// Start waiting for the interrupt signal
 	go func() {
 		for range c {
 			signal.Stop(c)
@@ -235,16 +251,20 @@ func main() {
 
 	// WaitGroup for the chainMonitor and stakeMonitor
 	var wg sync.WaitGroup
+
 	// Saver mutex, to share the same underlying output resource between block
 	// and stake info data savers
 	saverMutex := new(sync.Mutex)
 
+	// Build a slice of each required saver type for each data source
 	var blockDataSavers []BlockDataSaver
 	var stakeInfoDataSavers []StakeInfoDataSaver
+	// JSON to stdout
 	if cfg.SaveJSONStdout {
 		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
 		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
 	}
+	// JSON to file
 	if cfg.SaveJSONFile {
 		blockDataSavers = append(blockDataSavers,
 			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutex))
@@ -252,7 +272,7 @@ func main() {
 			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutex))
 	}
 
-	// If no savers specified, enable summary output
+	// If no savers specified, enable Summary Output
 	if len(blockDataSavers) == 0 {
 		cfg.SummaryOut = true
 	}
@@ -266,7 +286,6 @@ func main() {
 	}
 
 	// Block data collector
-	//var collector *blockDataCollector
 	collector, err := newBlockDataCollector(cfg, dcrdClient)
 	if err != nil {
 		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
@@ -280,15 +299,15 @@ func main() {
 		os.Exit(1)
 	}
 
-	if nil != summarySaverBlockData.Store(blockData) {
+	if err := summarySaverBlockData.Store(blockData); err != nil {
 		fmt.Printf("Failed to print initial block data summary. Error: %v", err.Error())
 		os.Exit(1)
 	}
 
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		// Blockchain monitor for the collector
-		// if collector is nil, so is connectChan
 		wg.Add(1)
+		// If collector is nil, so is connectChan
 		wsChainMonitor := newChainMonitor(collector, connectChan,
 			blockDataSavers, quit, &wg)
 		go wsChainMonitor.blockConnectedHandler()
@@ -315,7 +334,7 @@ func main() {
 			os.Exit(1)
 		}
 
-		if nil != summarySaverStakeInfo.Store(stakeInfoData) {
+		if err := summarySaverStakeInfo.Store(stakeInfoData); err != nil {
 			fmt.Printf("Failed to print initial stake info data summary. Error: %v", err.Error())
 			os.Exit(1)
 		}
@@ -379,27 +398,34 @@ func main() {
 	}
 
 	log.Infof("Bye!")
-	time.Sleep(1 * time.Second)
+	time.Sleep(500 * time.Millisecond)
 	os.Exit(1)
 }
 
+// execLogger conitnually scans for new lines on outpipe, reads the text for
+// each line and writes it to execlogger (i.e. EXEC).  This should be run as
+// a goroutine, using the cmdDone receiving channel to signal to stop logging,
+// which should happen when the command being executed has terminated.
 func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 	cmdScanner := bufio.NewScanner(outpipe)
 	//printout:
 	for {
+		// Check for new line, and write it to execLog
 		for cmdScanner.Scan() {
 			execLog.Info(cmdScanner.Text())
 		}
+		// Check for value in cmdDone, or closed channel
 		select {
 		case err, ok := <-cmdDone:
 			if !ok {
-				execLog.Info("Command logger closed.")
+				execLog.Warn("Command logger closed before execution completed.")
 				return
 			}
 			execLog.Info("Command execution complete: ", err)
 			return
 			//break printout
 		default:
+			// Take a break from scanning
 			time.Sleep(time.Millisecond * 50)
 		}
 	}
