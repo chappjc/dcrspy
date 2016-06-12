@@ -23,11 +23,16 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
-	_ "os/exec"
+	"os/exec"
 	"os/signal"
+	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -74,22 +79,47 @@ func main() {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
 	}
 
+	cmdName := cfg.CmdName // "ping"
+	args := cfg.CmdArgs    // "127.0.0.1,-n-8"
+
 	ntfnHandlersDaemon := dcrrpcclient.NotificationHandlers{
 		OnBlockConnected: func(hash *chainhash.Hash, height int32,
 			time time.Time, vb uint16) {
 			select {
 			case connectChan <- height:
-				// TODO: also call user-specified system command
-				// what are required arguments? how to select?
-				// cmdName, args := "pwd", ""
-				// cmd := exec.Command(cmdName, args)
-				// err := cmd.Start()
-				// if err != nil {
-				// 	log.Errorf("Failed to start system command %v. Error: %v",
-				// 		cmdName, err)
-				// }
-				// cerr := make(chan error)
-				// go func() { cerr <- cmd.Wait() }()
+				var argSubst bytes.Buffer
+				// replace %h and %n with hash and block height, resp.
+				rep := strings.NewReplacer("%h", hash.String(), "%n", strconv.Itoa(int(height)))
+				rep.WriteString(&argSubst, args)
+
+				// Split the argument string by comma
+				argsSl := strings.Split(argSubst.String(), ",")
+
+				// Create command, with substituted args
+				cmd := exec.Command(cmdName, argsSl...)
+				// Get a pipe for stdout
+				outpipe, err := cmd.StdoutPipe()
+				if err != nil {
+					log.Critical(err)
+				}
+				// Send stderr to the same place
+				cmd.Stderr = cmd.Stdout
+
+				fmt.Println(cmd.Path, strings.Join(argsSl, " "))
+
+				// Channel for logger and command execution routines
+				cmdDone := make(chan error)
+				go execLogger(outpipe, cmdDone)
+
+				go func() {
+					if err := cmd.Run(); err != nil {
+						log.Errorf("Failed to start system command %v. Error: %v",
+							cmdName, err)
+					}
+					// Signal the logger goroutine, and clean up
+					cmdDone <- err
+					close(cmdDone)
+				}()
 			// send to nil channel blocks
 			default:
 			}
@@ -246,12 +276,12 @@ func main() {
 	// Initial data summary prior to start of regular collection
 	blockData, err := collector.collect()
 	if err != nil {
-		fmt.Printf("Block data collection for initial summary failed.")
+		fmt.Printf("Block data collection for initial summary failed. Error: %v", err.Error())
 		os.Exit(1)
 	}
 
 	if nil != summarySaverBlockData.Store(blockData) {
-		fmt.Printf("Failed to print initial block data summary.")
+		fmt.Printf("Failed to print initial block data summary. Error: %v", err.Error())
 		os.Exit(1)
 	}
 
@@ -276,17 +306,17 @@ func main() {
 		// Initial data summary prior to start of regular collection
 		height, err := stakeCollector.getHeight()
 		if err != nil {
-			fmt.Printf("Unable to get current block height.")
+			fmt.Printf("Unable to get current block height. Error: %v", err.Error())
 			os.Exit(1)
 		}
 		stakeInfoData, err := stakeCollector.collect(height)
 		if err != nil {
-			fmt.Printf("Stake info data collection failed gathering initial data.")
+			fmt.Printf("Stake info data collection failed gathering initial data. Error: %v", err.Error())
 			os.Exit(1)
 		}
 
 		if nil != summarySaverStakeInfo.Store(stakeInfoData) {
-			fmt.Printf("Failed to print initial stake info data summary.")
+			fmt.Printf("Failed to print initial stake info data summary. Error: %v", err.Error())
 			os.Exit(1)
 		}
 
@@ -323,6 +353,7 @@ func main() {
 	// When os.Interrupt arrives, the channel quit will be closed
 	//<-quit
 	wg.Wait()
+
 	if cfg.NoMonitor {
 		c <- os.Interrupt
 		time.Sleep(200)
@@ -350,4 +381,26 @@ func main() {
 	log.Infof("Bye!")
 	time.Sleep(1 * time.Second)
 	os.Exit(1)
+}
+
+func execLogger(outpipe io.Reader, cmdDone <-chan error) {
+	cmdScanner := bufio.NewScanner(outpipe)
+	//printout:
+	for {
+		for cmdScanner.Scan() {
+			execLog.Info(cmdScanner.Text())
+		}
+		select {
+		case err, ok := <-cmdDone:
+			if !ok {
+				execLog.Info("Command logger closed.")
+				return
+			}
+			execLog.Info("Command execution complete: ", err)
+			return
+			//break printout
+		default:
+			time.Sleep(time.Millisecond * 50)
+		}
+	}
 }

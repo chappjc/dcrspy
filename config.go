@@ -58,6 +58,10 @@ type config struct {
 	Quiet       bool   `short:"q" long:"quiet" description:"Easy way to set debuglevel to error"`
 	LogDir      string `long:"logdir" description:"Directory to log output"`
 
+	// Comamnd execution
+	CmdName string `short:"c" long:"cmdname" description:"Command name to run. Must be on %PATH%."`
+	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of aruguments for command to run."`
+
 	// Data I/O
 	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
 	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
@@ -302,6 +306,9 @@ func loadConfig() (*config, error) {
 	if cfg.DcrwServ == "" {
 		cfg.DcrwServ = defaultHost + ":" + activeNet.RPCServerPort
 	}
+
+	// Put comma-separated comamnd line aguments into slice of strings
+	//cfg.CmdArgs = strings.Split(cfg.CmdArgs[0], ",")
 
 	// Output folder
 	cfg.OutFolder = cleanAndExpandPath(cfg.OutFolder)
