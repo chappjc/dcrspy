@@ -11,9 +11,9 @@ type version struct {
 var ver = version{
 	Major: 0,
 	Minor: 0,
-	Patch: 2,
-	Label: "alpha_1",
-	Nick:  "Jack Bauer"}
+	Patch: 3,
+	Label: "alpha",
+	Nick:  "Johnny English"}
 
 // CommitHash may be set on the build command line:
 // go build -ldflags "-X main.CommitHash=`git rev-parse HEAD`"
