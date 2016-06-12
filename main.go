@@ -421,7 +421,11 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 				execLog.Warn("Command logger closed before execution completed.")
 				return
 			}
-			execLog.Info("Command execution complete: ", err)
+			if err != nil {
+				execLog.Warn("Command execution complete. Error:", err)
+			} else {
+				execLog.Info("Command execution complete (success).")
+			}
 			return
 			//break printout
 		default:

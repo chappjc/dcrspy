@@ -1,5 +1,7 @@
 # dcrspy
 
+[![Build Status](http://img.shields.io/travis/chappjc/dcrspy.svg)](https://travis-ci.org/chappjc/dcrspy)
+[![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![Gitter](https://badges.gitter.im/chappjc/dcrspy.svg)](https://gitter.im/chappjc/dcrspy?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 dcrspy is a program to continuously monitor and log changes in various data
@@ -19,6 +21,63 @@ wallet connection is available.
 
 See [Data Details](#data-details) below for more information.
 
+## Arbitrary Command Execution
+
+When dcrspy receives a new block notification from dcrd, data collection and
+recording is triggered. In addition, any system command may be executed in
+response to the new block.  The flags to specify the command and the arguments
+to be used are:
+
+    -c, --cmdname=         Command name to run. Must be on %PATH%.
+    -a, --cmdargs=         Comma-separated list of arguments for command to run.
+
+The command name must be an executable (binary or script) on your PATH, which
+is $PATH in *NIX, and %PATH% in Windows.
+
+### Command Arguments
+
+Any arguments must be specified with
+cmdargs as a comma-separated list of strings.  For example:
+
+    -c ping -a "127.0.0.1,-n,8"
+
+will execute the following on Linux:
+
+    /usr/bin/ping 127.0.0.1 -n 8
+
+Specifying multiple arguments without commas, using spaces directly, is
+incorrect. For example, `-a "127.0.0.1 -n 8"` will not work.
+
+Note that if your command line arguments need to start with a dash (`-`) it is
+necessary to use the config file.  For example,
+
+    cmdname=ls
+    cmdargs="-al"
+
+### Block Hash and Height Substitution
+
+The new block hash and height at the time of command execution may be included
+on the command line using %h and %n, which are substituted for block hash and
+number. For example,
+
+    cmdname=echo
+    cmdargs="New best block hash: %h; height: %n"
+
+results in the following log entries (date removed for brevity):
+
+    [INF] DCRD: Block height 36435 connected
+    [INF] EXEC: New best block hash: 000000000000070f7a0593aee0728d6b3334c1e454da06efc0138008dc1b1cbd; height: 36435
+    [INF] EXEC: Command execution complete (success).
+
+Note that the above command used a semicolon since a comma would have indicated
+a second argument and been replaced with a space by echo.
+
+### Command Logging
+
+User-specified system command execution uses the logging subsystem tagged with
+EXEC in the logs. Both stdout and stderr for the executed command are sent to
+the dcrspy log.  The end of command execution is also logged, as shown in the
+example above.
 
 ## Output
 
@@ -114,53 +173,46 @@ Quick tips:
   * JSON to file system, with `-j, --save-jsonfile`.
 * To monitor only block data (no wallet connection), use `--nostakeinfo`.
 
-The full list of command line switches is below.
+The full list of command line switches is below, with current directory
+replaced by `...`:
 
 ~~~ none
+$ ./dcrspy -h
 Usage:
-  dcrspy.exe [OPTIONS]
+  dcrspy [OPTIONS]
 
 Application Options:
-  /C, /configfile:       Path to configuration file
-                         (...\dcrspy.conf)
-  /V, /version           Display version information and exit
-      /testnet           Use the test network (default mainnet)
-      /simnet            Use the simulation test network (default mainnet)
-  /d, /debuglevel:       Logging level {trace, debug, info, warn, error,
-                         critical} (info)
-  /q, /quiet             Easy way to set debuglevel to error
-      /logdir:           Directory to log output (...\logs)
-  /e, /nomonitor         Do not launch monitors. Display current data and
-                         (e)xit.
-      /noblockdata       Do not collect block data (default false)
-      /nostakeinfo       Do not collect stake info data (default false)
-  /f, /outfolder:        Folder for file outputs (...\spydata)
-  /s, /summary           Write plain text summary of key data to stdout
-  /o, /save-jsonstdout   Save JSON-formatted data to stdout
-  /j, /save-jsonfile     Save JSON-formatted data to file
-      /dcrduser:         Daemon RPC user name
-      /dcrdpass:         Daemon RPC password
-      /dcrdserv:         Hostname/IP and port of dcrd RPC server to connect to
-                         (default localhost:9109, testnet: localhost:19109,
-                         simnet: localhost:19556)
-      /dcrdcert:         File containing the dcrd certificate file
-                         (%localappdata%\Dcrd\rpc.cert)
-      /dcrwuser:         Wallet RPC user name
-      /dcrwpass:         Wallet RPC password
-      /dcrwserv:         Hostname/IP and port of dcrwallet RPC server to
-                         connect to (default localhost:9110, testnet:
-                         localhost:19110, simnet: localhost:19557)
-      /dcrwcert:         File containing the dcrwallet certificate file
-                         (%localappdata%\Dcrwallet\rpc.cert)
-      /noclienttls       Disable TLS for the RPC client -- NOTE: This is only
-                         allowed if the RPC client is connecting to localhost
-      /accountname:      Name of the account from (default: default) (default)
-      /ticketaddress:    Address to which you have given voting rights
-      /pooladdress:      Address to which you have given rights to pool fees
+  -C, --configfile=      Path to configuration file (.../dcrspy.conf)
+  -V, --version          Display version information and exit
+      --testnet          Use the test network (default mainnet)
+      --simnet           Use the simulation test network (default mainnet)
+  -d, --debuglevel=      Logging level {trace, debug, info, warn, error, critical} (info)
+  -q, --quiet            Easy way to set debuglevel to error
+      --logdir=          Directory to log output (.../logs)
+  -c, --cmdname=         Command name to run. Must be on %PATH%.
+  -a, --cmdargs=         Comma-separated list of aruguments for command to run.
+  -e, --nomonitor        Do not launch monitors. Display current data and (e)xit.
+      --noblockdata      Do not collect block data (default false)
+      --nostakeinfo      Do not collect stake info data (default false)
+  -f, --outfolder=       Folder for file outputs (.../spydata)
+  -s, --summary          Write plain text summary of key data to stdout
+  -o, --save-jsonstdout  Save JSON-formatted data to stdout
+  -j, --save-jsonfile    Save JSON-formatted data to file
+      --dcrduser=        Daemon RPC user name
+      --dcrdpass=        Daemon RPC password
+      --dcrdserv=        Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet: localhost:19556)
+      --dcrdcert=        File containing the dcrd certificate file (~/.dcrd/rpc.cert)
+      --dcrwuser=        Wallet RPC user name
+      --dcrwpass=        Wallet RPC password
+      --dcrwserv=        Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet: localhost:19557)
+      --dcrwcert=        File containing the dcrwallet certificate file (~/.dcrwallet/rpc.cert)
+      --noclienttls      Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost
+      --accountname=     Name of the account from (default: default) (default)
+      --ticketaddress=   Address to which you have given voting rights
+      --pooladdress=     Address to which you have given rights to pool fees
 
 Help Options:
-  /?                     Show this help message
-  /h, /help              Show this help message
+  -h, --help             Show this help message
 ~~~
 
 ### Config file
@@ -176,12 +228,13 @@ debuglevel=debug
 ; Default outfolder is a folder called "dcrspy" in the working directory.
 ; Change this with the outfolder option:
 ; Windows
-outfolder=%appdata%/dcrspy/spydata
+; outfolder=%appdata%/dcrspy/spydata
 ; Linux
 ; outfolder=$HOME/dcrspy/spydata
 
 ; Uncomment for testnet
 ;testnet=1
+; But also remember ports below, or do not specify for network defaults.
 
 dcrduser=duser
 dcrdpass=asdfExample
