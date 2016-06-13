@@ -130,6 +130,8 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 		defer s.mtx.Unlock()
 	}
 
+	winSize := activeNet.StakeDiffWindowSize
+
 	fmt.Printf("\nBlock %v:\n", data.header.Height)
 
 	var err error
@@ -139,8 +141,8 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 
 	_, err = fmt.Printf("\tEstimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
 		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
-	_, err = fmt.Printf("\tWindow progress:   %3d / 144  of price window number %v\n",
-		data.idxBlockInWindow, data.priceWindowNum)
+	_, err = fmt.Printf("\tWindow progress:   %3d / %3d  of price window number %v\n",
+		data.idxBlockInWindow, winSize, data.priceWindowNum)
 
 	_, err = fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
 		data.feeinfo.Mean, data.feeinfo.Median, data.feeinfo.StdDev,
@@ -346,6 +348,8 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 		defer s.mtx.Unlock()
 	}
 
+	winSize := activeNet.StakeDiffWindowSize
+
 	fmt.Printf("\nWallet and Stake Info at Height %v:\n", data.height)
 
 	fmt.Println("- Balances")
@@ -375,8 +379,8 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	fmt.Printf("\tmempool tickets:  %5d (own),      %7d (all)\n",
 		data.stakeinfo.OwnMempoolTix, data.stakeinfo.AllMempoolTix)
 
-	fmt.Printf("\tTicket price:    %8.3f  |    Window progress: %v / 144\n",
-		data.stakeinfo.Difficulty, data.idxBlockInWindow)
+	fmt.Printf("\tTicket price:    %8.3f  |    Window progress: %3d / %3d\n",
+		data.stakeinfo.Difficulty, data.idxBlockInWindow, winSize)
 
 	fmt.Printf("\tWallet's price:  %10.05f;  fee:   %.4f / KiB\n",
 		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)

@@ -439,3 +439,9 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 		}
 	}
 }
+
+// debugTiming can be called with defer so a function's execution time may be
+// logged.  (e.g. defer debugTiming(time.Now(), "someFunction"))
+func debugTiming(start time.Time, fun string) {
+	log.Debugf("%s completed in %s", fun, time.Since(start))
+}

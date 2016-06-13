@@ -173,7 +173,9 @@ func newBlockDataCollector(cfg *config,
 
 // collect is the main handler for collecting chain data
 func (t *blockDataCollector) collect() (*blockData, error) {
-	winSize := uint32(activeNet.StakeDiffWindowSize)
+	defer func(start time.Time) {
+		log.Debugf("blockDataCollector.collect() completed in %v", time.Since(start))
+	}(time.Now())
 
 	// Run first client call with a timeout
 	type bbhRes struct {
@@ -281,6 +283,7 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 	}
 
 	// Output
+	winSize := uint32(activeNet.StakeDiffWindowSize)
 	blockdata := &blockData{
 		header:           blockHeaderResults,
 		feeinfo:          feeInfoBlock,
