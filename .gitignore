@@ -30,6 +30,7 @@ logs
 .vscode
 data/*
 spydata/*
+releases
 
 # IntelliJ IDEA
 .idea

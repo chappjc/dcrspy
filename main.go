@@ -87,6 +87,11 @@ func main() {
 			time time.Time, vb uint16) {
 			select {
 			case connectChan <- height:
+				// Past this point in this case is command execution
+				if len(cmdName) == 0 {
+					break
+				}
+
 				// replace %h and %n with hash and block height, resp.
 				rep := strings.NewReplacer("%h", hash.String(), "%n", strconv.Itoa(int(height)))
 				var argSubst bytes.Buffer
@@ -115,7 +120,7 @@ func main() {
 				// Start command and return from handler without waiting
 				go func() {
 					if err := cmd.Run(); err != nil {
-						log.Errorf("Failed to start system command %v. Error: %v",
+						execLog.Errorf("Failed to start system command %v. Error: %v",
 							cmdName, err)
 					}
 					// Signal the logger goroutine, and clean up
