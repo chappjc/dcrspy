@@ -22,18 +22,20 @@ type chainMonitor struct {
 	blockConnectedChan chan int32
 	quit               chan struct{}
 	wg                 *sync.WaitGroup
+	noTicketPool	   bool
 }
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
 	blockConnChan chan int32, savers []BlockDataSaver,
-	quit chan struct{}, wg *sync.WaitGroup) *chainMonitor {
+	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool) *chainMonitor {
 	return &chainMonitor{
 		collector:          collector,
 		dataSavers:         savers,
 		blockConnectedChan: blockConnChan,
 		quit:               quit,
 		wg:                 wg,
+		noTicketPool:		noPoolValue,
 	}
 }
 
@@ -57,7 +59,7 @@ out:
 			bdataChan := make(chan *blockData)
 			// fire it off and get the blockData pointer back through the channel
 			go func() {
-				BlockData, err := p.collector.collect()
+				BlockData, err := p.collector.collect(p.noTicketPool)
 				if err != nil {
 					log.Errorf("Block data collection failed: %v", err.Error())
 					// BlockData is nil when err != nil

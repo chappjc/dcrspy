@@ -148,8 +148,10 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 		data.feeinfo.Mean, data.feeinfo.Median, data.feeinfo.StdDev,
 		data.feeinfo.Number)
 
-	_, err = fmt.Printf("\tTicket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
-		data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
+	if data.poolinfo.PoolValue >= 0 {
+		_, err = fmt.Printf("\tTicket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
+			data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
+	}
 
 	return err
 }

@@ -12,8 +12,8 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	//"sync/atomic"
 	"strconv"
+	"sync"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
@@ -73,7 +73,10 @@ func (t stakeInfoDataCollector) getHeight() (uint32, error) {
 
 // collect is the main handler for collecting chain data
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
-	winSize := uint32(activeNet.StakeDiffWindowSize)
+	// Time this function
+	defer func(start time.Time) {
+		log.Debugf("stakeInfoDataCollector.collect() completed in %v", time.Since(start))
+	}(time.Now())
 
 	// Client pointer, simply named
 	wallet := t.dcrwChainSvr
@@ -126,6 +129,7 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 	}
 
 	// Output
+	winSize := uint32(activeNet.StakeDiffWindowSize)
 	stakeinfo := &stakeInfoData{
 		height:           height,
 		walletInfo:       walletInfo,
@@ -158,6 +162,7 @@ type blockData struct {
 }
 
 type blockDataCollector struct {
+	mtx			 sync.Mutex
 	cfg          *config
 	dcrdChainSvr *dcrrpcclient.Client
 }
@@ -166,13 +171,20 @@ type blockDataCollector struct {
 func newBlockDataCollector(cfg *config,
 	dcrdChainSvr *dcrrpcclient.Client) (*blockDataCollector, error) {
 	return &blockDataCollector{
+		mtx:		  sync.Mutex{},
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
 	}, nil
 }
 
 // collect is the main handler for collecting chain data
-func (t *blockDataCollector) collect() (*blockData, error) {
+func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
+	// In case of a very fast block, make sure previous call to collect is not
+	// still running, or dcrd may be mad.
+	t.mtx.Lock()
+	defer t.mtx.Unlock()
+
+	// Time this function
 	defer func(start time.Time) {
 		log.Debugf("blockDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
@@ -207,20 +219,23 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 	}
 
 	blockHeader := bestBlock.MsgBlock().Header
-
-	height := blockHeader.Height
-	poolSize := blockHeader.PoolSize
 	//timestamp := blockHeader.Timestamp
+	height := blockHeader.Height
 
-	poolValue, err := t.dcrdChainSvr.GetTicketPoolValue()
-	if err != nil {
-		return nil, err
+	// In datasaver.go check TicketPoolInfo.PoolValue >= 0
+	ticketPoolInfo := TicketPoolInfo{0, -1, -1}
+	if !noTicketPool { 
+		poolSize := blockHeader.PoolSize
+
+		poolValue, err := t.dcrdChainSvr.GetTicketPoolValue()
+		if err != nil {
+			return nil, err
+		}
+		avgPricePoolAmt := poolValue / dcrutil.Amount(poolSize)
+
+		ticketPoolInfo = TicketPoolInfo{poolSize, poolValue.ToCoin(),
+			avgPricePoolAmt.ToCoin()}
 	}
-	avgPricePoolAmt := poolValue / dcrutil.Amount(poolSize)
-
-	tiketPoolInfo := TicketPoolInfo{poolSize, poolValue.ToCoin(),
-		avgPricePoolAmt.ToCoin()}
-
 	// Fee info
 	numFeeBlocks := uint32(1)
 	numFeeWindows := uint32(0)
@@ -289,7 +304,7 @@ func (t *blockDataCollector) collect() (*blockData, error) {
 		feeinfo:          feeInfoBlock,
 		currentstakediff: *stakeDiff,
 		eststakediff:     *estStakeDiff,
-		poolinfo:         tiketPoolInfo,
+		poolinfo:         ticketPoolInfo,
 		priceWindowNum:   int(height / winSize),
 		idxBlockInWindow: int(height%winSize) + 1,
 	}
