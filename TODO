@@ -2,16 +2,12 @@ dcrspy TODO
 ====
 
 Output 
-    JSON
-    stdout
     MySQL
     Memory?
 
 Input
     Types of data
-    Which outputs
     Monitor relevant tx
-    User specified command to execute on event
 
 .dcrspy folder for config file and log (vs. current dir)
 
