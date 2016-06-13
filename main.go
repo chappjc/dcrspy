@@ -111,7 +111,7 @@ func main() {
 				cmd.Stderr = cmd.Stdout
 
 				// Display the full command being executed
-				fmt.Println(cmd.Path, strings.Join(argsSplit, " "))
+				execLog.Info("Full command line to be executed: ", cmd.Path, strings.Join(argsSplit, " "))
 
 				// Channel for logger and command execution routines to talk
 				cmdDone := make(chan error)
