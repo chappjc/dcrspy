@@ -184,7 +184,7 @@ func main() {
 		fmt.Printf("Unable to get current network from dcrd: %s\n", err.Error())
 		os.Exit(1)
 	}
-	log.Debugf("Connected to dcrd on network: %v", net.String())
+	log.Infof("Connected to dcrd on network: %v", net.String())
 
 	// Register for block connection notifications.
 	if err := dcrdClient.NotifyBlocks(); err != nil {
@@ -296,9 +296,11 @@ func main() {
 		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
 		os.Exit(1)
 	}
+	
+	backendLog.Flush()
 
 	// Initial data summary prior to start of regular collection
-	blockData, err := collector.collect()
+	blockData, err := collector.collect(!cfg.PoolValue)
 	if err != nil {
 		fmt.Printf("Block data collection for initial summary failed. Error: %v", err.Error())
 		os.Exit(1)
@@ -314,7 +316,7 @@ func main() {
 		wg.Add(1)
 		// If collector is nil, so is connectChan
 		wsChainMonitor := newChainMonitor(collector, connectChan,
-			blockDataSavers, quit, &wg)
+			blockDataSavers, quit, &wg, !cfg.PoolValue)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -438,4 +440,10 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 			time.Sleep(time.Millisecond * 50)
 		}
 	}
+}
+
+// debugTiming can be called with defer so a function's execution time may be
+// logged.  (e.g. defer debugTiming(time.Now(), "someFunction"))
+func debugTiming(start time.Time, fun string) {
+	log.Debugf("%s completed in %s", fun, time.Since(start))
 }
