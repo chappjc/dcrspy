@@ -116,6 +116,11 @@ Wallet and Stake Info at Height 35561:
                          1 missed,          1 revoked
 ~~~
 
+Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
+not requested from dcrd, and thus not shown in the summary.  It is still
+present in JSON, but the values are {0, -1, -1}.  To get actualy ticket pool
+value, use `-p, --poolvalue`.
+
 ## TO-DO
 
 dcrspy is functional, but also a **work-in-progress**.  However, I will try to keep
@@ -194,6 +199,7 @@ Application Options:
   -e, --nomonitor        Do not launch monitors. Display current data and (e)xit.
       --noblockdata      Do not collect block data (default false)
       --nostakeinfo      Do not collect stake info data (default false)
+  -p, --poolvalue        Collect ticket pool value information (8-9 sec).
   -f, --outfolder=       Folder for file outputs (.../spydata)
   -s, --summary          Write plain text summary of key data to stdout
   -o, --save-jsonstdout  Save JSON-formatted data to stdout
@@ -224,6 +230,9 @@ dcrspy.conf by default.
 [Application Options]
 
 debuglevel=debug
+
+; Ticket pool value takes a long time, 8-9 sec, so the default is false.
+;poolvalue=false
 
 ; Default outfolder is a folder called "dcrspy" in the working directory.
 ; Change this with the outfolder option:
