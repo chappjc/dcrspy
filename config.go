@@ -66,7 +66,7 @@ type config struct {
 	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
 	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
 	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
-	PoolValue		   bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
+	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 	OutFolder          string `short:"f" long:"outfolder" description:"Folder for file outputs"`
 
 	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`

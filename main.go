@@ -32,7 +32,9 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrrpcclient"
+	"github.com/decred/dcrutil"
 )
 
 const (
@@ -65,6 +67,7 @@ func main() {
 	// notification handler to deliver blocks through a channel.
 	var connectChan chan int32
 	var stakeDiffChan chan int64
+	var newTxChan chan *dcrutil.Tx
 	// If we're monitoring for blocks OR collecting block data, these channels
 	// are necessary to handle new block notifications. Otherwise, leave them
 	// as nil so that both a send (below) blocks and a receive (in spy.go,
@@ -73,6 +76,7 @@ func main() {
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		connectChan = make(chan int32, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
+		newTxChan = make(chan *dcrutil.Tx, 80)
 	}
 	var connectChanStkInf chan int32
 	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
@@ -111,7 +115,8 @@ func main() {
 				cmd.Stderr = cmd.Stdout
 
 				// Display the full command being executed
-				execLog.Info("Full command line to be executed: ", cmd.Path, strings.Join(argsSplit, " "))
+				execLog.Infof("Full command line to be executed: %s %s",
+					cmd.Path, strings.Join(argsSplit, " "))
 
 				// Channel for logger and command execution routines to talk
 				cmdDone := make(chan error)
@@ -143,6 +148,37 @@ func main() {
 			case stakeDiffChan <- stakeDiff:
 			default:
 			}
+		},
+		//
+		OnWinningTickets: func(blockHash *chainhash.Hash, blockHeight int64,
+			tickets []*chainhash.Hash) {
+		},
+		// maturing tickets
+		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
+			tickets map[chainhash.Hash]chainhash.Hash) {
+
+		},
+		// OnRecvTx is invoked when a transaction that receives funds to a
+		// registered address is received into the memory pool and also
+		// connected to the longest (best) chain.
+		OnRecvTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+			log.Infof("Receied transaction %v receiving funds into registered address.",
+				transaction.Sha().String())
+			newTxChan <- transaction
+		},
+		// spend from registered address
+		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+		},
+		// OnTxAccepted is invoked when a transaction is accepted into the
+		// memory pool.  It will only be invoked if a preceding call to
+		// NotifyNewTransactions with the verbose flag set to false has been
+		// made to register for the notification and the function is non-nil.
+		OnTxAccepted: func(hash *chainhash.Hash, amount dcrutil.Amount) {
+			log.Info("Transaction accepted to mempool: ", hash, amount)
+		},
+		// Note: dcrjson.TxRawResult is from getrawtransaction
+		OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
+			log.Info("Transaction accepted to mempool: ", txDetails.Txid)
 		},
 	}
 
@@ -197,6 +233,27 @@ func main() {
 	if err := dcrdClient.NotifyStakeDifficulty(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"stake difficulty change notifications: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// Register for tx accepted into mempool ntfns
+	if err := dcrdClient.NotifyNewTransactions(false); err != nil {
+		fmt.Printf("Failed to register daemon RPC client for  "+
+			"new transaction (mempool) notifications: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// For OnRedeemingTx (spend) and OnRecvTx
+	// monitor some big pools as a test
+	addresses := []dcrutil.Address{
+		decodeNetAddr("DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ"),
+		decodeNetAddr("DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4"),
+		decodeNetAddr("DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW"),
+		decodeNetAddr("Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus"),
+		decodeNetAddr("DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE"),
+	}
+	if err := dcrdClient.NotifyReceived(addresses); err != nil {
+		fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
 		os.Exit(1)
 	}
 
@@ -296,7 +353,7 @@ func main() {
 		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
 		os.Exit(1)
 	}
-	
+
 	backendLog.Flush()
 
 	// Initial data summary prior to start of regular collection
@@ -354,6 +411,28 @@ func main() {
 			go wsStakeInfoMonitor.blockConnectedHandler()
 		}
 	}
+
+	go func() {
+		for {
+			select {
+			case s, ok := <-newTxChan:
+				if !ok {
+					log.Infof("New Tx channel closed")
+					return
+				}
+				//tx, err := dcrdClient.GetRawTransaction(s.Sha())
+				if err != nil {
+					log.Errorf("Failed to get transaction %v: %v",
+						s.Sha().String(), err)
+					return
+				}
+				log.Info("New Tx.  TxIn[0]: ", s.MsgTx().TxIn[0])
+			case <-quit:
+				log.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
+				return
+			}
+		}
+	}()
 
 	// stakediff not implemented yet as the notifier appears broken
 	go func() {
@@ -446,4 +525,9 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 // logged.  (e.g. defer debugTiming(time.Now(), "someFunction"))
 func debugTiming(start time.Time, fun string) {
 	log.Debugf("%s completed in %s", fun, time.Since(start))
+}
+
+func decodeNetAddr(addr string) dcrutil.Address {
+	address, _ := dcrutil.DecodeNetworkAddress(addr)
+	return address
 }

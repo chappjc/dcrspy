@@ -162,7 +162,7 @@ type blockData struct {
 }
 
 type blockDataCollector struct {
-	mtx			 sync.Mutex
+	mtx          sync.Mutex
 	cfg          *config
 	dcrdChainSvr *dcrrpcclient.Client
 }
@@ -171,7 +171,7 @@ type blockDataCollector struct {
 func newBlockDataCollector(cfg *config,
 	dcrdChainSvr *dcrrpcclient.Client) (*blockDataCollector, error) {
 	return &blockDataCollector{
-		mtx:		  sync.Mutex{},
+		mtx:          sync.Mutex{},
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
 	}, nil
@@ -224,7 +224,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// In datasaver.go check TicketPoolInfo.PoolValue >= 0
 	ticketPoolInfo := TicketPoolInfo{0, -1, -1}
-	if !noTicketPool { 
+	if !noTicketPool {
 		poolSize := blockHeader.PoolSize
 
 		poolValue, err := t.dcrdChainSvr.GetTicketPoolValue()

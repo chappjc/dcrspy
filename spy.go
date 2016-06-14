@@ -22,7 +22,7 @@ type chainMonitor struct {
 	blockConnectedChan chan int32
 	quit               chan struct{}
 	wg                 *sync.WaitGroup
-	noTicketPool	   bool
+	noTicketPool       bool
 }
 
 // newChainMonitor creates a new chainMonitor
@@ -35,7 +35,7 @@ func newChainMonitor(collector *blockDataCollector,
 		blockConnectedChan: blockConnChan,
 		quit:               quit,
 		wg:                 wg,
-		noTicketPool:		noPoolValue,
+		noTicketPool:       noPoolValue,
 	}
 }
 
