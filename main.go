@@ -84,7 +84,6 @@ func main() {
 		// TODO: new tickets
 	}
 
-
 	var connectChanStkInf chan int32
 	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
@@ -421,11 +420,20 @@ func main() {
 
 	if cfg.MonitorMempool {
 		var mempoolSavers []MempoolDataSaver
-		mempoolSavers = append(mempoolSavers,NewMempoolDataToSummaryStdOut(saverMutex))
+		mempoolSavers = append(mempoolSavers, NewMempoolDataToSummaryStdOut(saverMutex))
+
+		mpoolCollector, err := newMempoolDataCollector(cfg, dcrdClient)
+		if err != nil {
+			fmt.Printf("Failed to create mempool data collector: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+		newTicketLimit := int32(1)
+		mini, maxi := time.Duration(time.Second*2), time.Duration(time.Second*20)
 
 		wg.Add(1)
-		mpoolCollector, _ := newMempoolDataCollector(cfg,dcrdClient)
-		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers, quit, &wg)
+		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers,
+			quit, &wg, newTicketLimit, mini, maxi)
 		go mpm.txHandler()
 	}
 

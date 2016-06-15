@@ -1,8 +1,7 @@
-
 package main
 
 import (
-    "bytes"
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,8 +9,10 @@ import (
 	"path/filepath"
 	"sync"
 	"sync/atomic"
-    "time"
-    //"github.com/decred/dcrd/chaincfg/chainhash"
+	"time"
+	//"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/blockchain/stake"
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
@@ -20,58 +21,79 @@ import (
 var resetMempoolTix bool
 
 type mempoolInfo struct {
-    currentHeight                   uint32
-    numTicketPurchasesInMempool     int32
-    numTicketsSinceStatsReport      int32
-	lastCollectTime					time.Time
+	currentHeight               uint32
+	numTicketPurchasesInMempool int32
+	numTicketsSinceStatsReport  int32
+	lastCollectTime             time.Time
 }
 
 type mempoolMonitor struct {
-    mpoolInfo          mempoolInfo
-	newTicketCountLogTrigger int32
-	minInterval		   time.Duration
-	maxInterval		   time.Duration
-    collector          *mempoolDataCollector
-	dataSavers         []MempoolDataSaver
-	newTxChan          <-chan *dcrutil.Tx
-	quit               chan struct{}
-	wg                 *sync.WaitGroup
-    mtx                 sync.RWMutex
+	mpoolInfo      mempoolInfo
+	newTicketLimit int32
+	minInterval    time.Duration
+	maxInterval    time.Duration
+	collector      *mempoolDataCollector
+	dataSavers     []MempoolDataSaver
+	newTxChan      <-chan *dcrutil.Tx
+	quit           chan struct{}
+	wg             *sync.WaitGroup
+	mtx            sync.RWMutex
 }
 
 // newMempoolMonitor creates a new mempoolMonitor
 func newMempoolMonitor(collector *mempoolDataCollector,
 	txChan <-chan *dcrutil.Tx, savers []MempoolDataSaver,
-	quit chan struct{}, wg *sync.WaitGroup) *mempoolMonitor {
+	quit chan struct{}, wg *sync.WaitGroup, newTicketLimit int32,
+	mini time.Duration, maxi time.Duration) *mempoolMonitor {
 	return &mempoolMonitor{
-		collector:          collector,
-		dataSavers:         savers,
-		newTxChan:          txChan,
-		quit:               quit,
-		wg:                 wg,
+		newTicketLimit: newTicketLimit,
+		minInterval:    mini,
+		maxInterval:    maxi,
+		collector:      collector,
+		dataSavers:     savers,
+		newTxChan:      txChan,
+		quit:           quit,
+		wg:             wg,
 	}
 }
 
-func (p *mempoolMonitor) txHandler () {
+func (p *mempoolMonitor) txHandler() {
 	defer p.wg.Done()
-//out:
-    for {
+	//out:
+	for {
 	keepon:
-        select {
-        case s, ok := <-p.newTxChan:
-            if !ok {
-                log.Infof("New Tx channel closed")
-                return
-            }
-            //tx, err := dcrdClient.GetRawTransaction(s.Sha())
-            // if err != nil {
-            //     log.Errorf("Failed to get transaction %v: %v",
-            //         s.Sha().String(), err)
-            //     return
-            // }
-            log.Info("New Tx.  TxIn[0]: ", s.MsgTx().TxIn[0])
-			
+		select {
+		case s, ok := <-p.newTxChan:
+			if !ok {
+				log.Infof("New Tx channel closed")
+				return
+			}
+			//tx, err := dcrdClient.GetRawTransaction(s.Sha())
+			// if err != nil {
+			//     log.Errorf("Failed to get transaction %v: %v",
+			//         s.Sha().String(), err)
+			//     return
+			// }
+			log.Info("New Tx.  TxIn[0]: ", s.MsgTx().TxIn[0])
+
 			txHeight := s.MsgTx().TxIn[0].BlockHeight
+
+			txType := stake.DetermineTxType(s)
+
+			isTicket := txType == stake.TxTypeSSRtx
+			isVote := txType == stake.TxTypeSSGen
+			//isRegular := txType == stake.TxTypeRegular
+			//s.Tree() == dcrutil.TxTreeRegular
+
+			var ticketHash *chainhash.Hash
+			if isVote {
+				ticketHash = &s.MsgTx().TxIn[1].PreviousOutPoint.Hash
+				return
+			} else if isTicket {
+				ticketHash = s.Sha()
+			}
+
+			price := s.MsgTx().TxOut[0].Value
 
 			// TODO IMPORTANT: check if the tx is a ticket purchase
 			// TODO: get number of tickets in mempool, store in numTicketPurchasesInMempool
@@ -79,16 +101,16 @@ func (p *mempoolMonitor) txHandler () {
 
 			p.mtx.Lock()
 			defer p.mtx.Unlock()
-            // 1. Get block height
-			// 2. Record num new and total tickets in mp 
+			// 1. Get block height
+			// 2. Record num new and total tickets in mp
 			// 3. Collect mempool info (fee info), IF ANY OF:
 			//   a. block is new (height of Ticket-Tx > currentHeight)
-			//   b. num new tickets >= newTicketCountLogTrigger
+			//   b. num new tickets >= newTicketLimit
 			//   c. time since last exceeds > maxInterval
 			//   AND
 			//   time since lastCollectTime is greater than minInterval
 			newBlock := txHeight > p.mpoolInfo.currentHeight
-			enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport,1) > p.newTicketCountLogTrigger
+			enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, 1) > p.newTicketLimit
 			timeSinceLast := time.Since(p.mpoolInfo.lastCollectTime)
 			quiteLong := timeSinceLast > p.minInterval
 			longEnough := timeSinceLast > p.minInterval
@@ -97,7 +119,7 @@ func (p *mempoolMonitor) txHandler () {
 				p.mpoolInfo.currentHeight = txHeight
 			}
 
-			var data *mempoolData 
+			var data *mempoolData
 			var err error
 			if (newBlock || enoughNewTickets || quiteLong) && longEnough {
 				data, err = p.collector.collect()
@@ -118,25 +140,23 @@ func (p *mempoolMonitor) txHandler () {
 			}
 
 		// case s, ok := <-newTicketChan:
-        //     if !ok {
-        //         log.Infof("New ticket channel closed")
-        //         return
-        //     }
-        case <-p.quit:
-            log.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
-            return
-        }
-    }
+		//     if !ok {
+		//         log.Infof("New ticket channel closed")
+		//         return
+		//     }
+		case <-p.quit:
+			log.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
+			return
+		}
+	}
 }
-
 
 // COLLECTOR
 
 type mempoolData struct {
-    height      uint32
-    ticketfees  *dcrjson.TicketFeeInfoResult
+	height     uint32
+	ticketfees *dcrjson.TicketFeeInfoResult
 }
-
 
 type mempoolDataCollector struct {
 	mtx          sync.Mutex
@@ -166,7 +186,7 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 		log.Debugf("mempoolDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
-    height, err := t.dcrdChainSvr.GetBlockCount()
+	height, err := t.dcrdChainSvr.GetBlockCount()
 
 	// Fee info
 	numFeeBlocks := uint32(0)
@@ -179,14 +199,13 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 
 	//feeInfoMempool := feeInfo.FeeInfoMempool
 
-    mpoolData := &mempoolData{
-        height:     uint32(height),
-        ticketfees: feeInfo,
-    }
+	mpoolData := &mempoolData{
+		height:     uint32(height),
+		ticketfees: feeInfo,
+	}
 
-    return mpoolData, err
+	return mpoolData, err
 }
-
 
 // SAVER
 
@@ -297,14 +316,14 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 
 	//winSize := activeNet.StakeDiffWindowSize
 
-    mempoolTicketFees := data.ticketfees.FeeInfoMempool
+	mempoolTicketFees := data.ticketfees.FeeInfoMempool
 
 	fmt.Printf("\nBlock %v:\n", data.height)
 
 	var err error
 	_, err = fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
 		mempoolTicketFees.Mean, mempoolTicketFees.Median, mempoolTicketFees.StdDev,
-        mempoolTicketFees.Number)
+		mempoolTicketFees.Number)
 
 	return err
 }
