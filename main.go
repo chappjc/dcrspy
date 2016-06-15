@@ -67,7 +67,6 @@ func main() {
 	// notification handler to deliver blocks through a channel.
 	var connectChan chan int32
 	var stakeDiffChan chan int64
-	var newTxChan chan *dcrutil.Tx
 	// If we're monitoring for blocks OR collecting block data, these channels
 	// are necessary to handle new block notifications. Otherwise, leave them
 	// as nil so that both a send (below) blocks and a receive (in spy.go,
@@ -76,8 +75,16 @@ func main() {
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		connectChan = make(chan int32, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
-		newTxChan = make(chan *dcrutil.Tx, 80)
 	}
+
+	// mempool: new transactions, new tickets
+	var newTxChan chan *dcrutil.Tx
+	if cfg.MonitorMempool {
+		newTxChan = make(chan *dcrutil.Tx, 80)
+		// TODO: new tickets
+	}
+
+
 	var connectChanStkInf chan int32
 	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
@@ -412,27 +419,15 @@ func main() {
 		}
 	}
 
-	go func() {
-		for {
-			select {
-			case s, ok := <-newTxChan:
-				if !ok {
-					log.Infof("New Tx channel closed")
-					return
-				}
-				//tx, err := dcrdClient.GetRawTransaction(s.Sha())
-				if err != nil {
-					log.Errorf("Failed to get transaction %v: %v",
-						s.Sha().String(), err)
-					return
-				}
-				log.Info("New Tx.  TxIn[0]: ", s.MsgTx().TxIn[0])
-			case <-quit:
-				log.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
-				return
-			}
-		}
-	}()
+	if cfg.MonitorMempool {
+		var mempoolSavers []MempoolDataSaver
+		mempoolSavers = append(mempoolSavers,NewMempoolDataToSummaryStdOut(saverMutex))
+
+		wg.Add(1)
+		mpoolCollector, _ := newMempoolDataCollector(cfg,dcrdClient)
+		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers, quit, &wg)
+		go mpm.txHandler()
+	}
 
 	// stakediff not implemented yet as the notifier appears broken
 	go func() {
@@ -473,6 +468,9 @@ func main() {
 	}
 	if connectChanStkInf != nil {
 		close(connectChanStkInf)
+	}
+	if newTxChan != nil {
+		close(newTxChan)
 	}
 
 	log.Infof("Closing connection to dcrd.")

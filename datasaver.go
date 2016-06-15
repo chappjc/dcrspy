@@ -66,7 +66,7 @@ func NewBlockDataToJSONStdOut(m ...*sync.Mutex) *BlockDataToJSONStdOut {
 	return &BlockDataToJSONStdOut{}
 }
 
-// NewBlockDataToSummaryStdOut creates a new BlockDataToJSONStdOut with optional
+// NewBlockDataToSummaryStdOut creates a new BlockDataToSummaryStdOut with optional
 // existing mutex
 func NewBlockDataToSummaryStdOut(m ...*sync.Mutex) *BlockDataToSummaryStdOut {
 	if len(m) > 1 {

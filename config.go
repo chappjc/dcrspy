@@ -46,6 +46,7 @@ var (
 	defaultAccountName   = "default"
 	defaultTicketAddress = ""
 	defaultPoolAddress   = ""
+	defaultMonitorMempool = false
 )
 
 type config struct {
@@ -64,6 +65,7 @@ type config struct {
 
 	// Data I/O
 	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
+	MonitorMempool	   bool   `short:"m" long:"mempool" description:"Monitor mempool for new transactions, and report ticketfee info when new tickets are added."`
 	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
 	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
 	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
@@ -100,6 +102,7 @@ var (
 		OutFolder:     defaultOutputDir,
 		DcrdCert:      defaultDaemonRPCCertFile,
 		DcrwCert:      defaultWalletRPCCertFile,
+		MonitorMempool: defaultMonitorMempool,
 		AccountName:   defaultAccountName,
 		TicketAddress: defaultTicketAddress,
 		PoolAddress:   defaultPoolAddress,
