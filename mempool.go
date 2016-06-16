@@ -7,6 +7,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -22,7 +23,7 @@ var resetMempoolTix bool
 
 type mempoolInfo struct {
 	currentHeight               uint32
-	numTicketPurchasesInMempool int32
+	numTicketPurchasesInMempool uint32
 	numTicketsSinceStatsReport  int32
 	lastCollectTime             time.Time
 }
@@ -34,7 +35,7 @@ type mempoolMonitor struct {
 	maxInterval    time.Duration
 	collector      *mempoolDataCollector
 	dataSavers     []MempoolDataSaver
-	newTxChan      <-chan *dcrutil.Tx
+	newTxChan      <-chan *chainhash.Hash
 	quit           chan struct{}
 	wg             *sync.WaitGroup
 	mtx            sync.RWMutex
@@ -42,7 +43,7 @@ type mempoolMonitor struct {
 
 // newMempoolMonitor creates a new mempoolMonitor
 func newMempoolMonitor(collector *mempoolDataCollector,
-	txChan <-chan *dcrutil.Tx, savers []MempoolDataSaver,
+	txChan <-chan *chainhash.Hash, savers []MempoolDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup, newTicketLimit int32,
 	mini time.Duration, maxi time.Duration) *mempoolMonitor {
 	return &mempoolMonitor{
@@ -57,50 +58,104 @@ func newMempoolMonitor(collector *mempoolDataCollector,
 	}
 }
 
-func (p *mempoolMonitor) txHandler() {
+func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 	defer p.wg.Done()
 	//out:
 	for {
-	keepon:
+		//keepon:
 		select {
 		case s, ok := <-p.newTxChan:
 			if !ok {
-				log.Infof("New Tx channel closed")
+				mempoolLog.Infof("New Tx channel closed")
 				return
 			}
-			//tx, err := dcrdClient.GetRawTransaction(s.Sha())
-			// if err != nil {
-			//     log.Errorf("Failed to get transaction %v: %v",
-			//         s.Sha().String(), err)
-			//     return
+
+			var err error
+			var txHeight uint32
+			var oneTicket int32
+
+			// See if this was just the ticker firing
+			if s.IsEqual(new(chainhash.Hash)) {
+				// Just the ticker
+				bestBlock, err := client.GetBlockCount()
+				if err != nil {
+					mempoolLog.Error("Unable to get block count")
+					continue
+				}
+				txHeight = uint32(bestBlock)
+				// proceed in case it has been quiteLong
+			} else {
+				// OnTxAccepted probably sent on newTxChan
+				tx, err := client.GetRawTransaction(s)
+				if err != nil {
+					mempoolLog.Errorf("Failed to get transaction %v: %v",
+						s.String(), err)
+					continue
+				}
+
+				mempoolLog.Trace("New Tx: ", tx.Sha(), tx.MsgTx().TxIn[0].ValueIn)
+
+				// See dcrd/blockchain/stake/staketx.go for information about
+				// specifications for different transaction types (TODO).
+				txType := stake.DetermineTxType(tx)
+				//s.Tree() == dcrutil.TxTreeRegular
+
+				var ticketHash *chainhash.Hash
+
+				switch txType {
+				case stake.TxTypeRegular:
+					// Regular Tx
+					mempoolLog.Tracef("Received regular transaction: %v", tx.Sha())
+					continue
+				case stake.TxTypeSStx:
+					// Ticket purchase
+					ticketHash = tx.Sha()
+				case stake.TxTypeSSGen:
+					// Vote
+					ticketHash = &tx.MsgTx().TxIn[1].PreviousOutPoint.Hash
+					mempoolLog.Tracef("Received vote %v for ticket %v", tx.Sha(), ticketHash)
+					// TODO: Show subsidy for this vote (Vout[2] - Vin[1] ?)
+					continue
+				case stake.TxTypeSSRtx:
+					// Revoke
+					mempoolLog.Tracef("Received revoke transaction: %v", tx.Sha())
+					continue
+				default:
+					// Unknown
+					mempoolLog.Warnf("Received other transaction: %v", tx.Sha())
+					continue
+				}
+
+				price := tx.MsgTx().TxOut[0].Value
+				mempoolLog.Tracef("Received ticket purchase %v, price %v", ticketHash,
+					dcrutil.Amount(price).ToCoin())
+				// TODO: Get fee for this ticket (Vin[0] - Vout[0])
+
+				txHeight = tx.MsgTx().TxIn[0].BlockHeight
+				oneTicket = 1
+			}
+
+			// s.server.txMemPool.TxDescs()
+			ticketHashes, err := client.GetRawMempool(dcrjson.GRMTickets)
+			if err != nil {
+				mempoolLog.Errorf("Could not get raw mempool: %v", err.Error())
+				continue
+			}
+			p.mpoolInfo.numTicketPurchasesInMempool = uint32(len(ticketHashes))
+
+			// Just playing with getting all fees
+			// mempoolTickets[ticketHashes[0].String()].Fee
+			// mempoolTickets, err := client.GetRawMempoolVerbose(dcrjson.GRMTickets)
+			// allFees := make([]float64, 0, len(ticketHashes))
+			// for _, t := range mempoolTickets {
+			// 	txSize := float64(t.Size)
+			// 	allFees = append(allFees, t.Fee / txSize * 1000)
 			// }
-			log.Info("New Tx.  TxIn[0]: ", s.MsgTx().TxIn[0])
+			// medianFee := MedianCoin(allFees)
+			// mempoolLog.Infof("Median fee computed: %v (%v)", medianFee,
+			// 	len(ticketHashes))
 
-			txHeight := s.MsgTx().TxIn[0].BlockHeight
-
-			txType := stake.DetermineTxType(s)
-
-			isTicket := txType == stake.TxTypeSSRtx
-			isVote := txType == stake.TxTypeSSGen
-			//isRegular := txType == stake.TxTypeRegular
-			//s.Tree() == dcrutil.TxTreeRegular
-
-			var ticketHash *chainhash.Hash
-			if isVote {
-				ticketHash = &s.MsgTx().TxIn[1].PreviousOutPoint.Hash
-				return
-			} else if isTicket {
-				ticketHash = s.Sha()
-			}
-
-			price := s.MsgTx().TxOut[0].Value
-
-			// TODO IMPORTANT: check if the tx is a ticket purchase
-			// TODO: get number of tickets in mempool, store in numTicketPurchasesInMempool
-			//       update numTicketsSinceStatsReport that way instead of +1
-
-			p.mtx.Lock()
-			defer p.mtx.Unlock()
+			// Decide if it is time to collect and record new data
 			// 1. Get block height
 			// 2. Record num new and total tickets in mp
 			// 3. Collect mempool info (fee info), IF ANY OF:
@@ -108,28 +163,41 @@ func (p *mempoolMonitor) txHandler() {
 			//   b. num new tickets >= newTicketLimit
 			//   c. time since last exceeds > maxInterval
 			//   AND
-			//   time since lastCollectTime is greater than minInterval
+			//   time since lastCollectTime is at least minInterval
+			p.mtx.Lock()
+			// Atomics really aren't necessary here because of mutex
 			newBlock := txHeight > p.mpoolInfo.currentHeight
-			enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, 1) > p.newTicketLimit
+			enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, oneTicket) >= p.newTicketLimit
 			timeSinceLast := time.Since(p.mpoolInfo.lastCollectTime)
-			quiteLong := timeSinceLast > p.minInterval
-			longEnough := timeSinceLast > p.minInterval
+			quiteLong := timeSinceLast > p.maxInterval
+			longEnough := timeSinceLast >= p.minInterval
 
 			if newBlock {
-				p.mpoolInfo.currentHeight = txHeight
+				atomic.StoreUint32(&p.mpoolInfo.currentHeight, txHeight)
 			}
 
+			newTickets := p.mpoolInfo.numTicketsSinceStatsReport
+
 			var data *mempoolData
-			var err error
 			if (newBlock || enoughNewTickets || quiteLong) && longEnough {
+				atomic.StoreInt32(&p.mpoolInfo.numTicketsSinceStatsReport, 0)
+				p.mpoolInfo.lastCollectTime = time.Now()
+				p.mtx.Unlock()
+				mempoolLog.Trace("Gathering new mempool data.")
 				data, err = p.collector.collect()
 				if err != nil {
-					log.Errorf("mempool data collection failed: %v", err.Error())
+					mempoolLog.Errorf("mempool data collection failed: %v", err.Error())
 					// data is nil when err != nil
-					break keepon
+					continue
 				}
-				p.mpoolInfo.lastCollectTime = time.Now()
+			} else {
+				p.mtx.Unlock()
+				continue
 			}
+
+			data.newTickets = uint32(newTickets)
+
+			//p.mpoolInfo.numTicketPurchasesInMempool = data.ticketfees.FeeInfoMempool.Number
 
 			// Store block data with each saver
 			for _, s := range p.dataSavers {
@@ -145,16 +213,49 @@ func (p *mempoolMonitor) txHandler() {
 		//         return
 		//     }
 		case <-p.quit:
-			log.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
+			mempoolLog.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
 			return
 		}
 	}
+}
+
+// TODO
+func (p *mempoolMonitor) maybeCollect(txHeight uint32) (*mempoolData, error) {
+	p.mtx.Lock()
+	newBlock := txHeight > p.mpoolInfo.currentHeight
+	enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, 1) > p.newTicketLimit
+	timeSinceLast := time.Since(p.mpoolInfo.lastCollectTime)
+	quiteLong := timeSinceLast > p.maxInterval
+	longEnough := timeSinceLast > p.minInterval
+
+	if newBlock {
+		atomic.StoreUint32(&p.mpoolInfo.currentHeight, txHeight)
+	}
+
+	var err error
+	var data *mempoolData
+	if (newBlock || enoughNewTickets || quiteLong) && longEnough {
+		p.mpoolInfo.lastCollectTime = time.Now()
+		p.mtx.Unlock()
+		mempoolLog.Infof("Gathering new mempool data.")
+		data, err = p.collector.collect()
+		if err != nil {
+			mempoolLog.Errorf("mempool data collection failed: %v", err.Error())
+			// data is nil when err != nil
+		}
+	} else {
+		p.mtx.Unlock()
+	}
+
+	return data, err
 }
 
 // COLLECTOR
 
 type mempoolData struct {
 	height     uint32
+	numTickets uint32
+	newTickets uint32
 	ticketfees *dcrjson.TicketFeeInfoResult
 }
 
@@ -183,7 +284,7 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 
 	// Time this function
 	defer func(start time.Time) {
-		log.Debugf("mempoolDataCollector.collect() completed in %v", time.Since(start))
+		mempoolLog.Tracef("mempoolDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
 	height, err := t.dcrdChainSvr.GetBlockCount()
@@ -201,6 +302,7 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 
 	mpoolData := &mempoolData{
 		height:     uint32(height),
+		numTickets: feeInfo.FeeInfoMempool.Number,
 		ticketfees: feeInfo,
 	}
 
@@ -288,6 +390,11 @@ func NewMempoolDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex)
 
 // Store writes mempoolData to stdout in JSON format
 func (s *MempoolDataToJSONStdOut) Store(data *mempoolData) error {
+	// Do not write JSON data if there are no new tickets since last report
+	if data.newTickets == 0 {
+		return nil
+	}
+
 	if s.mtx != nil {
 		s.mtx.Lock()
 		defer s.mtx.Unlock()
@@ -303,6 +410,9 @@ func (s *MempoolDataToJSONStdOut) Store(data *mempoolData) error {
 	fmt.Printf("\n--- BEGIN mempoolData JSON ---\n")
 	_, err = writeFormattedJSONMempoolData(jsonConcat, os.Stdout)
 	fmt.Printf("--- END mempoolData JSON ---\n\n")
+	if err != nil {
+		mempoolLog.Error("Write JSON mempool data to stdout pipe: ", os.Stdout)
+	}
 
 	return err
 }
@@ -314,16 +424,13 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 		defer s.mtx.Unlock()
 	}
 
-	//winSize := activeNet.StakeDiffWindowSize
-
 	mempoolTicketFees := data.ticketfees.FeeInfoMempool
 
-	fmt.Printf("\nBlock %v:\n", data.height)
-
-	var err error
-	_, err = fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
-		mempoolTicketFees.Mean, mempoolTicketFees.Median, mempoolTicketFees.StdDev,
-		mempoolTicketFees.Number)
+	// time.Now().UTC().Format(time.UnixDate)
+	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
+		time.Now().Format("2006-01-02 15:04:05.99 -0700 MST"), data.height,
+		mempoolTicketFees.Mean, mempoolTicketFees.Median,
+		mempoolTicketFees.StdDev, mempoolTicketFees.Number)
 
 	return err
 }
@@ -331,6 +438,11 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 // Store writes mempoolData to a file in JSON format
 // The file name is nameBase+height+".json".
 func (s *MempoolDataToJSONFiles) Store(data *mempoolData) error {
+	// Do not write JSON data if there are no new tickets since last report
+	if data.newTickets == 0 {
+		return nil
+	}
+
 	if s.mtx != nil {
 		s.mtx.Lock()
 		defer s.mtx.Unlock()
@@ -343,17 +455,21 @@ func (s *MempoolDataToJSONFiles) Store(data *mempoolData) error {
 	}
 
 	// Write JSON to a file with block height in the name
-	fname := fmt.Sprintf("%s%d.json", s.nameBase, data.height)
+	fname := fmt.Sprintf("%s%d-%d.json", s.nameBase, data.height,
+		data.numTickets)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
 	defer fp.Close()
 	if err != nil {
-		log.Errorf("Unable to open file %v for writting.", fullfile)
+		mempoolLog.Errorf("Unable to open file %v for writting.", fullfile)
 		return err
 	}
 
 	s.file = *fp
 	_, err = writeFormattedJSONMempoolData(jsonConcat, &s.file)
+	if err != nil {
+		mempoolLog.Error("Write JSON mempool data to file: ", *fp)
+	}
 
 	return err
 }
@@ -372,8 +488,11 @@ func JSONFormatMempoolData(data *mempoolData) (*bytes.Buffer, error) {
 	jsonAll.WriteString("{\"ticketfeeinfo_mempool\": ")
 	feeInfoMempoolJSON, err := json.Marshal(data.ticketfees.FeeInfoMempool)
 	if err != nil {
+		mempoolLog.Error("Unable to marshall mempool ticketfee info to JSON: ",
+			err.Error())
 		return nil, err
 	}
+
 	jsonAll.Write(feeInfoMempoolJSON)
 	//feeInfoMempoolJSON, err := json.MarshalIndent(data.ticketfees.FeeInfoMempool, "", "    ")
 	//fmt.Println(string(feeInfoMempoolJSON))
@@ -383,8 +502,45 @@ func JSONFormatMempoolData(data *mempoolData) (*bytes.Buffer, error) {
 	var jsonAllIndented bytes.Buffer
 	err = json.Indent(&jsonAllIndented, jsonAll.Bytes(), "", "    ")
 	if err != nil {
+		mempoolLog.Error("Unable to format JSON mempool data: ", err.Error())
 		return nil, err
 	}
 
 	return &jsonAllIndented, err
+}
+
+// MedianAmount gets the median Amount from a slice of Amounts
+func MedianAmount(s []dcrutil.Amount) dcrutil.Amount {
+	if len(s) == 0 {
+		return 0
+	}
+
+	sort.Sort(dcrutil.AmountSorter(s))
+
+	middle := len(s) / 2
+
+	if len(s) == 0 {
+		return 0
+	} else if (len(s) % 2) != 0 {
+		return s[middle]
+	}
+	return (s[middle] + s[middle-1]) / 2
+}
+
+// MedianCoin gets the median DCR from a slice of float64s
+func MedianCoin(s []float64) float64 {
+	if len(s) == 0 {
+		return 0
+	}
+
+	sort.Float64s(s)
+
+	middle := len(s) / 2
+
+	if len(s) == 0 {
+		return 0
+	} else if (len(s) % 2) != 0 {
+		return s[middle]
+	}
+	return (s[middle] + s[middle-1]) / 2
 }

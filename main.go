@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	_ "encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -78,10 +79,11 @@ func main() {
 	}
 
 	// mempool: new transactions, new tickets
-	var newTxChan chan *dcrutil.Tx
+	var recvTxChan chan *dcrutil.Tx
+	var newTxChan chan *chainhash.Hash
 	if cfg.MonitorMempool {
-		newTxChan = make(chan *dcrutil.Tx, 80)
-		// TODO: new tickets
+		recvTxChan = make(chan *dcrutil.Tx, 80)
+		newTxChan = make(chan *chainhash.Hash, 80)
 	}
 
 	var connectChanStkInf chan int32
@@ -162,15 +164,17 @@ func main() {
 		// maturing tickets
 		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
 			tickets map[chainhash.Hash]chainhash.Hash) {
-
+			for _, tick := range tickets {
+				log.Debugf("Mined new ticket: %v", tick.String())
+			}
 		},
 		// OnRecvTx is invoked when a transaction that receives funds to a
 		// registered address is received into the memory pool and also
 		// connected to the longest (best) chain.
 		OnRecvTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+			recvTxChan <- transaction
 			log.Infof("Receied transaction %v receiving funds into registered address.",
 				transaction.Sha().String())
-			newTxChan <- transaction
 		},
 		// spend from registered address
 		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
@@ -180,11 +184,24 @@ func main() {
 		// NotifyNewTransactions with the verbose flag set to false has been
 		// made to register for the notification and the function is non-nil.
 		OnTxAccepted: func(hash *chainhash.Hash, amount dcrutil.Amount) {
-			log.Info("Transaction accepted to mempool: ", hash, amount)
+			// b, err := hex.DecodeString(hash.String())
+			// if err != nil {
+			// 	log.Errorf("Unable to decode Tx hash string: %v, %v",hash.String(),
+			// 		err.Error())
+			// }
+			// tx, err := dcrutil.NewTxFromBytes(hash.Bytes())
+			// if err != nil {
+			// 	log.Errorf("Unable to create Tx from bytes: %v, %v",hash.String(),
+			// 		err.Error())
+			// 	return
+			// }
+			newTxChan <- hash
+			//log.Info("Transaction accepted to mempool: ", hash, amount)
 		},
 		// Note: dcrjson.TxRawResult is from getrawtransaction
 		OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
-			log.Info("Transaction accepted to mempool: ", txDetails.Txid)
+			//txDetails.Hex
+			//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
 		},
 	}
 
@@ -246,6 +263,13 @@ func main() {
 	if err := dcrdClient.NotifyNewTransactions(false); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"new transaction (mempool) notifications: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// For OnNewTickets
+	if err := dcrdClient.NotifyNewTickets(); err != nil {
+		fmt.Printf("Failed to register daemon RPC client for  "+
+			"new tickets (mempool) notifications: %s\n", err.Error())
 		os.Exit(1)
 	}
 
@@ -327,10 +351,12 @@ func main() {
 	// Build a slice of each required saver type for each data source
 	var blockDataSavers []BlockDataSaver
 	var stakeInfoDataSavers []StakeInfoDataSaver
+	var mempoolSavers []MempoolDataSaver
 	// JSON to stdout
 	if cfg.SaveJSONStdout {
 		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
 		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
+		mempoolSavers = append(mempoolSavers, NewMempoolDataToJSONStdOut(saverMutex))
 	}
 	// JSON to file
 	if cfg.SaveJSONFile {
@@ -338,6 +364,8 @@ func main() {
 			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutex))
 		stakeInfoDataSavers = append(stakeInfoDataSavers,
 			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutex))
+		mempoolSavers = append(mempoolSavers,
+			NewMempoolDataToJSONFiles(cfg.OutFolder, "mempool-info-", saverMutex))
 	}
 
 	// If no savers specified, enable Summary Output
@@ -347,10 +375,12 @@ func main() {
 
 	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutex)
 	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutex)
+	summarySaverMempool := NewMempoolDataToSummaryStdOut(saverMutex)
 
 	if cfg.SummaryOut {
 		blockDataSavers = append(blockDataSavers, summarySaverBlockData)
 		stakeInfoDataSavers = append(stakeInfoDataSavers, summarySaverStakeInfo)
+		mempoolSavers = append(mempoolSavers, summarySaverMempool)
 	}
 
 	// Block data collector
@@ -418,23 +448,40 @@ func main() {
 		}
 	}
 
+	var txTicker *time.Ticker
 	if cfg.MonitorMempool {
-		var mempoolSavers []MempoolDataSaver
-		mempoolSavers = append(mempoolSavers, NewMempoolDataToSummaryStdOut(saverMutex))
-
 		mpoolCollector, err := newMempoolDataCollector(cfg, dcrdClient)
 		if err != nil {
 			fmt.Printf("Failed to create mempool data collector: %s\n", err.Error())
 			os.Exit(1)
 		}
 
-		newTicketLimit := int32(1)
-		mini, maxi := time.Duration(time.Second*2), time.Duration(time.Second*20)
+		mempoolInfo, err := mpoolCollector.collect()
+		if err != nil {
+			fmt.Printf("Mempool info collection failed while gathering initial data. Error: %v", err.Error())
+			os.Exit(1)
+		}
+
+		if err := summarySaverMempool.Store(mempoolInfo); err != nil {
+			fmt.Printf("Failed to print initial mempool info summary. Error: %v", err.Error())
+			os.Exit(1)
+		}
+
+		newTicketLimit := int32(cfg.MPTriggerTickets)
+		mini := time.Duration(time.Duration(cfg.MempoolMinInterval) * time.Second)
+		maxi := time.Duration(time.Duration(cfg.MempoolMaxInterval) * time.Second)
 
 		wg.Add(1)
 		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers,
 			quit, &wg, newTicketLimit, mini, maxi)
-		go mpm.txHandler()
+		go mpm.txHandler(dcrdClient)
+
+		txTicker = time.NewTicker(time.Second * 2)
+		go func() {
+			for range txTicker.C {
+				newTxChan <- new(chainhash.Hash)
+			}
+		}()
 	}
 
 	// stakediff not implemented yet as the notifier appears broken
@@ -478,7 +525,11 @@ func main() {
 		close(connectChanStkInf)
 	}
 	if newTxChan != nil {
+		txTicker.Stop()
 		close(newTxChan)
+	}
+	if recvTxChan != nil {
+		close(recvTxChan)
 	}
 
 	log.Infof("Closing connection to dcrd.")
