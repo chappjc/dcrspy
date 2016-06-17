@@ -47,6 +47,7 @@ func newMempoolMonitor(collector *mempoolDataCollector,
 	quit chan struct{}, wg *sync.WaitGroup, newTicketLimit int32,
 	mini time.Duration, maxi time.Duration) *mempoolMonitor {
 	return &mempoolMonitor{
+		mpoolInfo:      mempoolInfo{}, // defaults OK here?
 		newTicketLimit: newTicketLimit,
 		minInterval:    mini,
 		maxInterval:    maxi,
@@ -428,7 +429,7 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 
 	// time.Now().UTC().Format(time.UnixDate)
 	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
-		time.Now().Format("2006-01-02 15:04:05.99 -0700 MST"), data.height,
+		time.Now().Format("2006-01-02 15:04:05.00 -0700 MST"), data.height,
 		mempoolTicketFees.Mean, mempoolTicketFees.Median,
 		mempoolTicketFees.StdDev, mempoolTicketFees.Number)
 

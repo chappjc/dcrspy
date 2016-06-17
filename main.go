@@ -172,6 +172,8 @@ func main() {
 			tickets []*chainhash.Hash) {
 		},
 		// maturing tickets
+		// BUG: dcrrpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
+		// Unmarshal fourth parameter as a map[hash]hash.
 		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
 			tickets map[chainhash.Hash]chainhash.Hash) {
 			for _, tick := range tickets {
@@ -222,10 +224,10 @@ func main() {
 			//log.Info("Transaction accepted to mempool: ", hash, amount)
 		},
 		// Note: dcrjson.TxRawResult is from getrawtransaction
-		OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
-			//txDetails.Hex
-			//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
-		},
+		//OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
+		//txDetails.Hex
+		//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
+		//},
 	}
 
 	// Daemon client connection
@@ -311,11 +313,12 @@ func main() {
 	}
 
 	// For OnNewTickets
-	if err := dcrdClient.NotifyNewTickets(); err != nil {
-		fmt.Printf("Failed to register daemon RPC client for  "+
-			"new tickets (mempool) notifications: %s\n", err.Error())
-		os.Exit(1)
-	}
+	//  Commented since there is a bug in dcrrpcclient/notify.go
+	// if err := dcrdClient.NotifyNewTickets(); err != nil {
+	// 	fmt.Printf("Failed to register daemon RPC client for  "+
+	// 		"new tickets (mempool) notifications: %s\n", err.Error())
+	// 	os.Exit(1)
+	// }
 
 	// For OnRedeemingTx (spend) and OnRecvTx
 	if len(addresses) > 0 {
@@ -523,8 +526,9 @@ func main() {
 	}
 
 	if len(addresses) > 0 {
-		wg.Add(1)
+		wg.Add(2)
 		go handleReceivingTx(dcrdClient, addrMap, recvTxChan, &wg, quit)
+		go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 
 	// stakediff not implemented yet as the notifier appears broken
