@@ -19,6 +19,7 @@ package main
 import (
 	"bufio"
 	"bytes"
+	_ "encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -32,8 +33,15 @@ import (
 
 	//"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrrpcclient"
+	"github.com/decred/dcrutil"
 )
+
+type watchedAddrTx struct {
+	transaction *dcrutil.Tx
+	details     *dcrjson.BlockDetails
+}
 
 const (
 	// blockConnChanBuffer is the size of the block connected channel buffer.
@@ -74,6 +82,20 @@ func main() {
 		connectChan = make(chan int32, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
 	}
+
+	// mempool: new transactions, new tickets
+	var newTxChan chan *chainhash.Hash
+	if cfg.MonitorMempool {
+		newTxChan = make(chan *chainhash.Hash, 80)
+	}
+
+	// watchaddress
+	var recvTxChan, spendTxChan chan *watchedAddrTx
+	if len(cfg.WatchAddresses) > 0 {
+		recvTxChan = make(chan *watchedAddrTx, 80)
+		spendTxChan = make(chan *watchedAddrTx, 80)
+	}
+
 	var connectChanStkInf chan int32
 	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
@@ -111,7 +133,8 @@ func main() {
 				cmd.Stderr = cmd.Stdout
 
 				// Display the full command being executed
-				execLog.Info("Full command line to be executed: ", cmd.Path, strings.Join(argsSplit, " "))
+				execLog.Infof("Full command line to be executed: %s %s",
+					cmd.Path, strings.Join(argsSplit, " "))
 
 				// Channel for logger and command execution routines to talk
 				cmdDone := make(chan error)
@@ -144,6 +167,67 @@ func main() {
 			default:
 			}
 		},
+		//
+		OnWinningTickets: func(blockHash *chainhash.Hash, blockHeight int64,
+			tickets []*chainhash.Hash) {
+		},
+		// maturing tickets
+		// BUG: dcrrpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
+		// Unmarshal fourth parameter as a map[hash]hash.
+		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
+			tickets map[chainhash.Hash]chainhash.Hash) {
+			for _, tick := range tickets {
+				log.Debugf("Mined new ticket: %v", tick.String())
+			}
+		},
+		// OnRecvTx is invoked when a transaction that receives funds to a
+		// registered address is received into the memory pool and also
+		// connected to the longest (best) chain.
+		OnRecvTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+			// To determine if this was mined into a block or accepted into
+			// mempool, we need details, which is nil in the mempool case
+			wAddrTx := &watchedAddrTx{transaction, details}
+			select {
+			case recvTxChan <- wAddrTx:
+				log.Infof("Detected transaction %v receiving funds into registered address.",
+					transaction.Sha().String())
+			default:
+			}
+		},
+		// spend from registered address
+		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+			wAddrTx := &watchedAddrTx{transaction, details}
+			select {
+			case spendTxChan <- wAddrTx:
+				log.Infof("Detected transaction %v spending funds from registered address.",
+					transaction.Sha().String())
+			default:
+			}
+		},
+		// OnTxAccepted is invoked when a transaction is accepted into the
+		// memory pool.  It will only be invoked if a preceding call to
+		// NotifyNewTransactions with the verbose flag set to false has been
+		// made to register for the notification and the function is non-nil.
+		OnTxAccepted: func(hash *chainhash.Hash, amount dcrutil.Amount) {
+			// b, err := hex.DecodeString(hash.String())
+			// if err != nil {
+			// 	log.Errorf("Unable to decode Tx hash string: %v, %v",hash.String(),
+			// 		err.Error())
+			// }
+			// tx, err := dcrutil.NewTxFromBytes(hash.Bytes())
+			// if err != nil {
+			// 	log.Errorf("Unable to create Tx from bytes: %v, %v",hash.String(),
+			// 		err.Error())
+			// 	return
+			// }
+			newTxChan <- hash
+			//log.Info("Transaction accepted to mempool: ", hash, amount)
+		},
+		// Note: dcrjson.TxRawResult is from getrawtransaction
+		//OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
+		//txDetails.Hex
+		//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
+		//},
 	}
 
 	// Daemon client connection
@@ -186,6 +270,27 @@ func main() {
 	}
 	log.Infof("Connected to dcrd on network: %v", net.String())
 
+	// Validate watchaddresses
+	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
+	addrMap := make(map[string]struct{})
+	if len(cfg.WatchAddresses) > 0 {
+		for _, a := range cfg.WatchAddresses {
+			addr, err := dcrutil.DecodeAddress(a, activeNet.Params)
+			// or DecodeNetworkAddress for auto-detection of network
+			if err != nil {
+				log.Errorf("Invalid watchaddress %v", a)
+				os.Exit(1)
+			}
+			log.Debugf("Valid watchaddress: %v", addr)
+			addresses = append(addresses, addr)
+			addrMap[a] = struct{}{}
+		}
+		if len(addresses) == 0 {
+			close(recvTxChan)
+			close(spendTxChan)
+		}
+	}
+
 	// Register for block connection notifications.
 	if err := dcrdClient.NotifyBlocks(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
@@ -198,6 +303,29 @@ func main() {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"stake difficulty change notifications: %s\n", err.Error())
 		os.Exit(1)
+	}
+
+	// Register for tx accepted into mempool ntfns
+	if err := dcrdClient.NotifyNewTransactions(false); err != nil {
+		fmt.Printf("Failed to register daemon RPC client for  "+
+			"new transaction (mempool) notifications: %s\n", err.Error())
+		os.Exit(1)
+	}
+
+	// For OnNewTickets
+	//  Commented since there is a bug in dcrrpcclient/notify.go
+	// if err := dcrdClient.NotifyNewTickets(); err != nil {
+	// 	fmt.Printf("Failed to register daemon RPC client for  "+
+	// 		"new tickets (mempool) notifications: %s\n", err.Error())
+	// 	os.Exit(1)
+	// }
+
+	// For OnRedeemingTx (spend) and OnRecvTx
+	if len(addresses) > 0 {
+		if err := dcrdClient.NotifyReceived(addresses); err != nil {
+			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	// Wallet
@@ -264,10 +392,12 @@ func main() {
 	// Build a slice of each required saver type for each data source
 	var blockDataSavers []BlockDataSaver
 	var stakeInfoDataSavers []StakeInfoDataSaver
+	var mempoolSavers []MempoolDataSaver
 	// JSON to stdout
 	if cfg.SaveJSONStdout {
 		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
 		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
+		mempoolSavers = append(mempoolSavers, NewMempoolDataToJSONStdOut(saverMutex))
 	}
 	// JSON to file
 	if cfg.SaveJSONFile {
@@ -275,6 +405,8 @@ func main() {
 			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutex))
 		stakeInfoDataSavers = append(stakeInfoDataSavers,
 			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutex))
+		mempoolSavers = append(mempoolSavers,
+			NewMempoolDataToJSONFiles(cfg.OutFolder, "mempool-info-", saverMutex))
 	}
 
 	// If no savers specified, enable Summary Output
@@ -284,10 +416,12 @@ func main() {
 
 	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutex)
 	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutex)
+	summarySaverMempool := NewMempoolDataToSummaryStdOut(saverMutex)
 
 	if cfg.SummaryOut {
 		blockDataSavers = append(blockDataSavers, summarySaverBlockData)
 		stakeInfoDataSavers = append(stakeInfoDataSavers, summarySaverStakeInfo)
+		mempoolSavers = append(mempoolSavers, summarySaverMempool)
 	}
 
 	// Block data collector
@@ -296,7 +430,7 @@ func main() {
 		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
 		os.Exit(1)
 	}
-	
+
 	backendLog.Flush()
 
 	// Initial data summary prior to start of regular collection
@@ -355,6 +489,48 @@ func main() {
 		}
 	}
 
+	var txTicker *time.Ticker
+	if cfg.MonitorMempool {
+		mpoolCollector, err := newMempoolDataCollector(cfg, dcrdClient)
+		if err != nil {
+			fmt.Printf("Failed to create mempool data collector: %s\n", err.Error())
+			os.Exit(1)
+		}
+
+		mempoolInfo, err := mpoolCollector.collect()
+		if err != nil {
+			fmt.Printf("Mempool info collection failed while gathering initial data. Error: %v", err.Error())
+			os.Exit(1)
+		}
+
+		if err := summarySaverMempool.Store(mempoolInfo); err != nil {
+			fmt.Printf("Failed to print initial mempool info summary. Error: %v", err.Error())
+			os.Exit(1)
+		}
+
+		newTicketLimit := int32(cfg.MPTriggerTickets)
+		mini := time.Duration(time.Duration(cfg.MempoolMinInterval) * time.Second)
+		maxi := time.Duration(time.Duration(cfg.MempoolMaxInterval) * time.Second)
+
+		wg.Add(1)
+		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers,
+			quit, &wg, newTicketLimit, mini, maxi)
+		go mpm.txHandler(dcrdClient)
+
+		txTicker = time.NewTicker(time.Second * 2)
+		go func() {
+			for range txTicker.C {
+				newTxChan <- new(chainhash.Hash)
+			}
+		}()
+	}
+
+	if len(addresses) > 0 {
+		wg.Add(2)
+		go handleReceivingTx(dcrdClient, addrMap, recvTxChan, &wg, quit)
+		go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
+	}
+
 	// stakediff not implemented yet as the notifier appears broken
 	go func() {
 		for {
@@ -394,6 +570,17 @@ func main() {
 	}
 	if connectChanStkInf != nil {
 		close(connectChanStkInf)
+	}
+	if newTxChan != nil {
+		txTicker.Stop()
+		close(newTxChan)
+	}
+
+	if recvTxChan != nil {
+		close(recvTxChan)
+	}
+	if spendTxChan != nil {
+		close(spendTxChan)
 	}
 
 	log.Infof("Closing connection to dcrd.")
@@ -446,4 +633,9 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 // logged.  (e.g. defer debugTiming(time.Now(), "someFunction"))
 func debugTiming(start time.Time, fun string) {
 	log.Debugf("%s completed in %s", fun, time.Since(start))
+}
+
+func decodeNetAddr(addr string) dcrutil.Address {
+	address, _ := dcrutil.DecodeNetworkAddress(addr)
+	return address
 }

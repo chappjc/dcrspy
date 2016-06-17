@@ -75,7 +75,7 @@ func (t stakeInfoDataCollector) getHeight() (uint32, error) {
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	// Time this function
 	defer func(start time.Time) {
-		log.Debugf("stakeInfoDataCollector.collect() completed in %v", time.Since(start))
+		log.Tracef("stakeInfoDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
 	// Client pointer, simply named
@@ -162,7 +162,7 @@ type blockData struct {
 }
 
 type blockDataCollector struct {
-	mtx			 sync.Mutex
+	mtx          sync.Mutex
 	cfg          *config
 	dcrdChainSvr *dcrrpcclient.Client
 }
@@ -171,7 +171,7 @@ type blockDataCollector struct {
 func newBlockDataCollector(cfg *config,
 	dcrdChainSvr *dcrrpcclient.Client) (*blockDataCollector, error) {
 	return &blockDataCollector{
-		mtx:		  sync.Mutex{},
+		mtx:          sync.Mutex{},
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
 	}, nil
@@ -186,7 +186,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// Time this function
 	defer func(start time.Time) {
-		log.Debugf("blockDataCollector.collect() completed in %v", time.Since(start))
+		log.Tracef("blockDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
 	// Run first client call with a timeout
@@ -224,7 +224,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// In datasaver.go check TicketPoolInfo.PoolValue >= 0
 	ticketPoolInfo := TicketPoolInfo{0, -1, -1}
-	if !noTicketPool { 
+	if !noTicketPool {
 		poolSize := blockHeader.PoolSize
 
 		poolValue, err := t.dcrdChainSvr.GetTicketPoolValue()

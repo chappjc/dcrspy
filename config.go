@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	flags "github.com/btcsuite/go-flags"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrutil"
 	"github.com/decred/dcrwallet/netparams"
 )
@@ -29,6 +30,7 @@ const (
 
 var curDir, _ = os.Getwd()
 var activeNet = &netparams.MainNetParams
+var activeChain = &chaincfg.MainNetParams
 
 var (
 	dcrdHomeDir      = dcrutil.AppDataDir("dcrd", false)
@@ -43,9 +45,14 @@ var (
 	defaultOutputDir         = filepath.Join(curDir, defaultOutputDirname)
 	defaultHost              = "localhost"
 
-	defaultAccountName   = "default"
-	defaultTicketAddress = ""
-	defaultPoolAddress   = ""
+	defaultMempoolMinInterval = 4
+	defaultMempoolMaxInterval = 120
+	defaultMPTriggerTickets   = 4
+
+	defaultAccountName    = "default"
+	defaultTicketAddress  = ""
+	defaultPoolAddress    = ""
+	defaultMonitorMempool = false
 )
 
 type config struct {
@@ -60,14 +67,20 @@ type config struct {
 
 	// Comamnd execution
 	CmdName string `short:"c" long:"cmdname" description:"Command name to run. Must be on %PATH%."`
-	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of arguments for command to run."`
+	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of arguments for command to run. The specifier %n is substituted for block height at execution, and %h is substituted for block hash."`
 
 	// Data I/O
 	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
+	MonitorMempool     bool   `short:"m" long:"mempool" description:"Monitor mempool for new transactions, and report ticketfee info when new tickets are added."`
+	MempoolMinInterval int    `long:"mp-min-interval" description:"The minimum time in seconds between mempool reports, regarless of number of new tickets seen."`
+	MempoolMaxInterval int    `long:"mp-max-interval" description:"The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen."`
+	MPTriggerTickets   int    `long:"mp-ticket-trigger" description:"The number minimum number of new tickets that must be seen to trigger a new mempool report."`
 	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
 	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
-	PoolValue		   bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
+	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 	OutFolder          string `short:"f" long:"outfolder" description:"Folder for file outputs"`
+
+	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
 
 	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
 	SaveJSONStdout bool `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
@@ -94,15 +107,19 @@ type config struct {
 
 var (
 	defaultConfig = config{
-		DebugLevel:    defaultLogLevel,
-		ConfigFile:    defaultConfigFile,
-		LogDir:        defaultLogDir,
-		OutFolder:     defaultOutputDir,
-		DcrdCert:      defaultDaemonRPCCertFile,
-		DcrwCert:      defaultWalletRPCCertFile,
-		AccountName:   defaultAccountName,
-		TicketAddress: defaultTicketAddress,
-		PoolAddress:   defaultPoolAddress,
+		DebugLevel:         defaultLogLevel,
+		ConfigFile:         defaultConfigFile,
+		LogDir:             defaultLogDir,
+		OutFolder:          defaultOutputDir,
+		DcrdCert:           defaultDaemonRPCCertFile,
+		DcrwCert:           defaultWalletRPCCertFile,
+		MonitorMempool:     defaultMonitorMempool,
+		MempoolMinInterval: defaultMempoolMinInterval,
+		MempoolMaxInterval: defaultMempoolMaxInterval,
+		MPTriggerTickets:   defaultMPTriggerTickets,
+		AccountName:        defaultAccountName,
+		TicketAddress:      defaultTicketAddress,
+		PoolAddress:        defaultPoolAddress,
 	}
 )
 
@@ -282,12 +299,15 @@ func loadConfig() (*config, error) {
 	// Multiple networks can't be selected simultaneously.
 	numNets := 0
 	activeNet = &netparams.MainNetParams
+	activeChain = &chaincfg.MainNetParams
 	if cfg.TestNet {
 		activeNet = &netparams.TestNetParams
+		activeChain = &chaincfg.TestNetParams
 		numNets++
 	}
 	if cfg.SimNet {
 		activeNet = &netparams.SimNetParams
+		activeChain = &chaincfg.SimNetParams
 		numNets++
 	}
 	if numNets > 1 {

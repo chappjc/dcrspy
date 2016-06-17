@@ -10,8 +10,8 @@ type version struct {
 
 var ver = version{
 	Major: 0,
-	Minor: 0,
-	Patch: 4,
+	Minor: 1,
+	Patch: 0,
 	Label: "alpha",
 	Nick:  "Dick Steele"}
 
@@ -21,7 +21,7 @@ var ver = version{
 
 const appName string = "dcrspy"
 
-func (v version) String() string {
+func (v *version) String() string {
 	if v.Label != "" {
 		return fmt.Sprintf("%d.%d.%d-%s \"%s\"",
 			v.Major, v.Minor, v.Patch, v.Label, v.Nick)
