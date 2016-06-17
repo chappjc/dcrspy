@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	flags "github.com/btcsuite/go-flags"
+	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrutil"
 	"github.com/decred/dcrwallet/netparams"
 )
@@ -29,6 +30,7 @@ const (
 
 var curDir, _ = os.Getwd()
 var activeNet = &netparams.MainNetParams
+var activeChain = &chaincfg.MainNetParams
 
 var (
 	dcrdHomeDir      = dcrutil.AppDataDir("dcrd", false)
@@ -77,6 +79,8 @@ type config struct {
 	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
 	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 	OutFolder          string `short:"f" long:"outfolder" description:"Folder for file outputs"`
+
+	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
 
 	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
 	SaveJSONStdout bool `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
@@ -295,12 +299,15 @@ func loadConfig() (*config, error) {
 	// Multiple networks can't be selected simultaneously.
 	numNets := 0
 	activeNet = &netparams.MainNetParams
+	activeChain = &chaincfg.MainNetParams
 	if cfg.TestNet {
 		activeNet = &netparams.TestNetParams
+		activeChain = &chaincfg.TestNetParams
 		numNets++
 	}
 	if cfg.SimNet {
 		activeNet = &netparams.SimNetParams
+		activeChain = &chaincfg.SimNetParams
 		numNets++
 	}
 	if numNets > 1 {

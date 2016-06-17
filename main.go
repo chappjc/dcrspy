@@ -38,6 +38,11 @@ import (
 	"github.com/decred/dcrutil"
 )
 
+type watchedAddrTx struct {
+	transaction *dcrutil.Tx
+	details     *dcrjson.BlockDetails
+}
+
 const (
 	// blockConnChanBuffer is the size of the block connected channel buffer.
 	blockConnChanBuffer = 100
@@ -79,11 +84,16 @@ func main() {
 	}
 
 	// mempool: new transactions, new tickets
-	var recvTxChan chan *dcrutil.Tx
 	var newTxChan chan *chainhash.Hash
 	if cfg.MonitorMempool {
-		recvTxChan = make(chan *dcrutil.Tx, 80)
 		newTxChan = make(chan *chainhash.Hash, 80)
+	}
+
+	// watchaddress
+	var recvTxChan, spendTxChan chan *watchedAddrTx
+	if len(cfg.WatchAddresses) > 0 {
+		recvTxChan = make(chan *watchedAddrTx, 80)
+		spendTxChan = make(chan *watchedAddrTx, 80)
 	}
 
 	var connectChanStkInf chan int32
@@ -172,12 +182,25 @@ func main() {
 		// registered address is received into the memory pool and also
 		// connected to the longest (best) chain.
 		OnRecvTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
-			recvTxChan <- transaction
-			log.Infof("Receied transaction %v receiving funds into registered address.",
-				transaction.Sha().String())
+			// To determine if this was mined into a block or accepted into
+			// mempool, we need details, which is nil in the mempool case
+			wAddrTx := &watchedAddrTx{transaction, details}
+			select {
+			case recvTxChan <- wAddrTx:
+				log.Infof("Detected transaction %v receiving funds into registered address.",
+					transaction.Sha().String())
+			default:
+			}
 		},
 		// spend from registered address
 		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
+			wAddrTx := &watchedAddrTx{transaction, details}
+			select {
+			case spendTxChan <- wAddrTx:
+				log.Infof("Detected transaction %v spending funds from registered address.",
+					transaction.Sha().String())
+			default:
+			}
 		},
 		// OnTxAccepted is invoked when a transaction is accepted into the
 		// memory pool.  It will only be invoked if a preceding call to
@@ -245,6 +268,27 @@ func main() {
 	}
 	log.Infof("Connected to dcrd on network: %v", net.String())
 
+	// Validate watchaddresses
+	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
+	addrMap := make(map[string]struct{})
+	if len(cfg.WatchAddresses) > 0 {
+		for _, a := range cfg.WatchAddresses {
+			addr, err := dcrutil.DecodeAddress(a, activeNet.Params)
+			// or DecodeNetworkAddress for auto-detection of network
+			if err != nil {
+				log.Errorf("Invalid watchaddress %v", a)
+				os.Exit(1)
+			}
+			log.Debugf("Valid watchaddress: %v", addr)
+			addresses = append(addresses, addr)
+			addrMap[a] = struct{}{}
+		}
+		if len(addresses) == 0 {
+			close(recvTxChan)
+			close(spendTxChan)
+		}
+	}
+
 	// Register for block connection notifications.
 	if err := dcrdClient.NotifyBlocks(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
@@ -274,17 +318,11 @@ func main() {
 	}
 
 	// For OnRedeemingTx (spend) and OnRecvTx
-	// monitor some big pools as a test
-	addresses := []dcrutil.Address{
-		decodeNetAddr("DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ"),
-		decodeNetAddr("DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4"),
-		decodeNetAddr("DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW"),
-		decodeNetAddr("Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus"),
-		decodeNetAddr("DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE"),
-	}
-	if err := dcrdClient.NotifyReceived(addresses); err != nil {
-		fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
-		os.Exit(1)
+	if len(addresses) > 0 {
+		if err := dcrdClient.NotifyReceived(addresses); err != nil {
+			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
+			os.Exit(1)
+		}
 	}
 
 	// Wallet
@@ -484,6 +522,11 @@ func main() {
 		}()
 	}
 
+	if len(addresses) > 0 {
+		wg.Add(1)
+		go handleReceivingTx(dcrdClient, addrMap, recvTxChan, &wg, quit)
+	}
+
 	// stakediff not implemented yet as the notifier appears broken
 	go func() {
 		for {
@@ -528,8 +571,12 @@ func main() {
 		txTicker.Stop()
 		close(newTxChan)
 	}
+
 	if recvTxChan != nil {
 		close(recvTxChan)
+	}
+	if spendTxChan != nil {
+		close(spendTxChan)
 	}
 
 	log.Infof("Closing connection to dcrd.")
