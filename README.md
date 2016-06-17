@@ -11,18 +11,20 @@ dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the [Decr
 
 ## Types of Data
 
-Two types of information are monitored:
+The types of information monitored are:
 
 * Block chain data (from dcrd)
-* Stake and wallet information (from your wallet).
+* Stake and wallet information (from your wallet, optional).
 * Mempool ticket info (from dcrd)
 
 A connection to dcrwallet is optional. Only block data will be obtained when no
 wallet connection is available.
 
-Transactions involving watched addresses may also be logged.
-
 See [Data Details](#data-details) below for more information.
+
+Transactions involving **watched addresses** may also be logged (using the
+`watchaddress` flag).  Watching for addresses receiving funds seems to be OK,
+but watching for sending funds from a watched address is experimental.
 
 ## Arbitrary Command Execution
 
@@ -33,9 +35,13 @@ to be used are:
 
     -c, --cmdname=         Command name to run. Must be on %PATH%.
     -a, --cmdargs=         Comma-separated list of arguments for command to run.
+                           The specifier %n is substituted for block number at
+                           execution, and %h is substituted for block hash.
 
-The command name must be an executable (binary or script) on your PATH, which
-is $PATH in *NIX, and %PATH% in Windows.
+The command name must be an executable (binary or script) on your shell's PATH,
+which is `$PATH` in *NIX, and `%PATH%` in Windows.
+
+TODO: Delay execution, or run after data saving is complete.
 
 ### Command Arguments
 
@@ -238,6 +244,27 @@ dcrspy.conf by default.
 [Application Options]
 
 debuglevel=debug
+
+;cmdname=echo
+;cmdargs="New best block hash: %h; height: %n"
+;cmdname=ping
+;cmdargs="127.0.0.1,-n,8"
+
+; Monitor mempool for new tickets, displaying fees
+;mempool=true
+;mp-min-interval=4
+;mp-max-interval=120
+;mp-ticket-trigger=4
+
+; Addresses to watch for incoming transactions
+; Decred developer (C0) address
+;watchaddress=Dcur2mcGjmENx4DhNqDctW5wJCVyT3Qeqkx
+; Some larger mining pool addresses:
+;watchaddress=DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ
+;watchaddress=DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4
+;watchaddress=DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW
+;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus
+;watchaddress=DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE
 
 ; Ticket pool value takes a long time, 8-9 sec, so the default is false.
 ;poolvalue=false

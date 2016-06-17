@@ -67,7 +67,7 @@ type config struct {
 
 	// Comamnd execution
 	CmdName string `short:"c" long:"cmdname" description:"Command name to run. Must be on %PATH%."`
-	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of arguments for command to run."`
+	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of arguments for command to run. The specifier %n is substituted for block height at execution, and %h is substituted for block hash."`
 
 	// Data I/O
 	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
