@@ -58,7 +58,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
 			}
 
 		case <-quit:
-			mempoolLog.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
+			mempoolLog.Debugf("Quitting OnRecvTx handler.")
 			return
 		}
 	}
@@ -141,7 +141,7 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
 				// log.Debug(addresses)
 			}
 		case <-quit:
-			mempoolLog.Debugf("Quitting OnRecvTx/OnRedeemingTx handler.")
+			mempoolLog.Debugf("Quitting OnRedeemingTx handler.")
 			return
 		}
 	}

@@ -89,7 +89,7 @@ out:
 
 		case _, ok := <-p.quit:
 			if !ok {
-				log.Infof("Got quit signal. Exiting block connected handler for BLOCK monitor.")
+				log.Debugf("Got quit signal. Exiting block connected handler for BLOCK monitor.")
 				break out
 			}
 		}
@@ -158,7 +158,7 @@ out:
 
 		case _, ok := <-p.quit:
 			if !ok {
-				log.Infof("Got quit signal. Exiting block connected handler for STAKE monitor.")
+				log.Debugf("Got quit signal. Exiting block connected handler for STAKE monitor.")
 				break out
 			}
 		}

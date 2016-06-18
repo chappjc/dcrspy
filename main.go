@@ -84,6 +84,12 @@ func main() {
 	}
 
 	// mempool: new transactions, new tickets
+	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
+	if cfg.MonitorMempool && cfg.NoMonitor {
+		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified.  Not monitoring mempool.")
+		cfg.MonitorMempool = false
+	}
+
 	var newTxChan chan *chainhash.Hash
 	if cfg.MonitorMempool {
 		newTxChan = make(chan *chainhash.Hash, 80)
@@ -91,7 +97,7 @@ func main() {
 
 	// watchaddress
 	var recvTxChan, spendTxChan chan *watchedAddrTx
-	if len(cfg.WatchAddresses) > 0 {
+	if len(cfg.WatchAddresses) > 0  && !cfg.NoMonitor {
 		recvTxChan = make(chan *watchedAddrTx, 80)
 		spendTxChan = make(chan *watchedAddrTx, 80)
 	}
@@ -220,7 +226,10 @@ func main() {
 			// 		err.Error())
 			// 	return
 			// }
-			newTxChan <- hash
+			select {
+			case newTxChan <- hash:
+			default:
+			}
 			//log.Info("Transaction accepted to mempool: ", hash, amount)
 		},
 		// Note: dcrjson.TxRawResult is from getrawtransaction
@@ -243,7 +252,7 @@ func main() {
 		}
 	}
 
-	log.Infof("Attempting to connect to dcrd RPC %s as user %s "+
+	log.Debugf("Attempting to connect to dcrd RPC %s as user %s "+
 		"using certificate located in %s",
 		cfg.DcrdServ, cfg.DcrdUser, cfg.DcrdCert)
 
@@ -273,7 +282,7 @@ func main() {
 	// Validate watchaddresses
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
 	addrMap := make(map[string]struct{})
-	if len(cfg.WatchAddresses) > 0 {
+	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		for _, a := range cfg.WatchAddresses {
 			addr, err := dcrutil.DecodeAddress(a, activeNet.Params)
 			// or DecodeNetworkAddress for auto-detection of network
@@ -281,13 +290,19 @@ func main() {
 				log.Errorf("Invalid watchaddress %v", a)
 				os.Exit(1)
 			}
-			log.Debugf("Valid watchaddress: %v", addr)
+			log.Infof("Valid watchaddress: %v", addr)
 			addresses = append(addresses, addr)
 			addrMap[a] = struct{}{}
 		}
 		if len(addresses) == 0 {
-			close(recvTxChan)
-			close(spendTxChan)
+			if recvTxChan != nil {
+				close(recvTxChan)
+				recvTxChan = nil
+			}
+			if spendTxChan != nil {
+				close(spendTxChan)
+				spendTxChan = nil
+			}
 		}
 	}
 
@@ -343,7 +358,7 @@ func main() {
 			}
 		}
 
-		log.Infof("Attempting to connect to dcrwallet RPC %s as user %s "+
+		log.Debugf("Attempting to connect to dcrwallet RPC %s as user %s "+
 			"using certificate located in %s",
 			cfg.DcrwServ, cfg.DcrwUser, cfg.DcrwCert)
 
@@ -379,6 +394,7 @@ func main() {
 			// Close the channel so multiple goroutines can get the message
 			log.Infof("CTRL+C hit.  Closing goroutines.")
 			close(quit)
+			return
 		}
 	}()
 
@@ -537,7 +553,7 @@ func main() {
 			select {
 			case s, ok := <-stakeDiffChan:
 				if !ok {
-					log.Infof("Stake difficulty channel closed")
+					log.Debugf("Stake difficulty channel closed")
 					return
 				}
 				log.Debugf("Got stake difficulty change notification (%v). "+
