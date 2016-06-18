@@ -97,7 +97,7 @@ func main() {
 
 	// watchaddress
 	var recvTxChan, spendTxChan chan *watchedAddrTx
-	if len(cfg.WatchAddresses) > 0  && !cfg.NoMonitor {
+	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		recvTxChan = make(chan *watchedAddrTx, 80)
 		spendTxChan = make(chan *watchedAddrTx, 80)
 	}

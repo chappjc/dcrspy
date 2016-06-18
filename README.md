@@ -160,6 +160,10 @@ There is a [very long to-do list](https://drive.google.com/open?id=1Z057i7tGfnAT
 
 * Find dcrspy executable in `$GOPATH/bin`, and copy elsewhere (recommended).
 
+If you receive build errors, it may be due to "vendor" directories left by
+glide builds of dependencies such as dcrwallet.  You may safely delete vendor
+folders.
+
 ## Updating
 
 Run the same command used to build:
