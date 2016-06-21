@@ -1,6 +1,8 @@
 # dcrspy
 
+<!--- #[![release version](https://badge.fury.io/gh/chappjc%2Fdcrspy.svg)](https://badge.fury.io/gh/chappjc%2Fdcrspy) -->
 [![Build Status](http://img.shields.io/travis/chappjc/dcrspy.svg)](https://travis-ci.org/chappjc/dcrspy)
+[![GitHub release](https://img.shields.io/github/release/chappjc/dcrspy.svg)](https://github.com/chappjc/dcrspy/releases)
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 [![Gitter](https://badges.gitter.im/chappjc/dcrspy.svg)](https://gitter.im/chappjc/dcrspy?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
