@@ -2,8 +2,6 @@
 // controllers; blockData and stakeInfoData, the data structures returned by
 // the collect() methods.
 //
-// To-do: mempool collector for ticket count/fee info.
-//
 // chappjc
 
 package main

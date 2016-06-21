@@ -45,14 +45,15 @@ var (
 	defaultOutputDir         = filepath.Join(curDir, defaultOutputDirname)
 	defaultHost              = "localhost"
 
+	defaultMonitorMempool     = false
 	defaultMempoolMinInterval = 4
 	defaultMempoolMaxInterval = 120
 	defaultMPTriggerTickets   = 4
+	defaultFeeWinRadius       = 0
 
-	defaultAccountName    = "default"
-	defaultTicketAddress  = ""
-	defaultPoolAddress    = ""
-	defaultMonitorMempool = false
+	// defaultAccountName    = "default"
+	// defaultTicketAddress  = ""
+	// defaultPoolAddress    = ""
 )
 
 type config struct {
@@ -70,21 +71,22 @@ type config struct {
 	CmdArgs string `short:"a" long:"cmdargs" description:"Comma-separated list of arguments for command to run. The specifier %n is substituted for block height at execution, and %h is substituted for block hash."`
 
 	// Data I/O
-	NoMonitor          bool   `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
-	MonitorMempool     bool   `short:"m" long:"mempool" description:"Monitor mempool for new transactions, and report ticketfee info when new tickets are added."`
-	MempoolMinInterval int    `long:"mp-min-interval" description:"The minimum time in seconds between mempool reports, regarless of number of new tickets seen."`
-	MempoolMaxInterval int    `long:"mp-max-interval" description:"The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen."`
-	MPTriggerTickets   int    `long:"mp-ticket-trigger" description:"The number minimum number of new tickets that must be seen to trigger a new mempool report."`
-	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
-	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
-	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
-	OutFolder          string `short:"f" long:"outfolder" description:"Folder for file outputs"`
+	NoMonitor          bool `short:"e" long:"nomonitor" description:"Do not launch monitors. Display current data and (e)xit."`
+	MonitorMempool     bool `short:"m" long:"mempool" description:"Monitor mempool for new transactions, and report ticketfee info when new tickets are added."`
+	MempoolMinInterval int  `long:"mp-min-interval" description:"The minimum time in seconds between mempool reports, regarless of number of new tickets seen."`
+	MempoolMaxInterval int  `long:"mp-max-interval" description:"The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen."`
+	MPTriggerTickets   int  `long:"mp-ticket-trigger" description:"The number minimum number of new tickets that must be seen to trigger a new mempool report."`
+	FeeWinRadius       int  `short:"r" long:"feewinradius" description:"Half-width of a window around the ticket with the lowest mineable fee."`
+	NoCollectBlockData bool `long:"noblockdata" description:"Do not collect block data (default false)"`
+	NoCollectStakeInfo bool `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
+	PoolValue          bool `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 
 	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
 
-	SummaryOut     bool `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
-	SaveJSONStdout bool `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
-	SaveJSONFile   bool `short:"j" long:"save-jsonfile" description:"Save JSON-formatted data to file"`
+	SummaryOut     bool   `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
+	SaveJSONStdout bool   `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
+	SaveJSONFile   bool   `short:"j" long:"save-jsonfile" description:"Save JSON-formatted data to file"`
+	OutFolder      string `short:"f" long:"outfolder" description:"Folder for file outputs"`
 	//SaveMongoDB        bool    `short:"g" long:"save-mongo" description:"Save data to MongoDB"`
 	//SaveMySQL          bool    `short:"q" long:"save-mysql" description:"Save data to MySQL"`
 
@@ -99,10 +101,10 @@ type config struct {
 	DcrwCert         string `long:"dcrwcert" description:"File containing the dcrwallet certificate file"`
 	DisableClientTLS bool   `long:"noclienttls" description:"Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
 
-	// Automatic ticket buyer settings
-	AccountName   string `long:"accountname" description:"Name of the account from (default: default)"`
-	TicketAddress string `long:"ticketaddress" description:"Address to which you have given voting rights"`
-	PoolAddress   string `long:"pooladdress" description:"Address to which you have given rights to pool fees"`
+	// TODO
+	//AccountName   string `long:"accountname" description:"Account name (other than default or imported) for which balances should be listed."`
+	//TicketAddress string `long:"ticketaddress" description:"Address to which you have given voting rights"`
+	//PoolAddress   string `long:"pooladdress" description:"Address to which you have given rights to pool fees"`
 }
 
 var (
@@ -117,9 +119,10 @@ var (
 		MempoolMinInterval: defaultMempoolMinInterval,
 		MempoolMaxInterval: defaultMempoolMaxInterval,
 		MPTriggerTickets:   defaultMPTriggerTickets,
-		AccountName:        defaultAccountName,
-		TicketAddress:      defaultTicketAddress,
-		PoolAddress:        defaultPoolAddress,
+		FeeWinRadius:       defaultFeeWinRadius,
+		// AccountName:        defaultAccountName,
+		// TicketAddress:      defaultTicketAddress,
+		// PoolAddress:        defaultPoolAddress,
 	}
 )
 
