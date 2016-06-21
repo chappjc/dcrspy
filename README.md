@@ -376,9 +376,11 @@ Wallet data is stored in a similar manner in file `stake-info-[BLOCKNUM].json`.
 There are three data types, tagged `"getstakeinfo`", `"walletinfo"`, and
 `"balances"`.  TODO: Update this README with a testnet example output.
 
-## Issue Tracker
+## Issues
 
 Please report any issues using the [GitHub issue tracker](https://github.com/chappjc/dcrspy/issues).
+
+You may also visit the [dcrspy thread](https://forum.decred.org/threads/decred-monitor-and-data-collector-dcrspy.3838/) at the official Decred forum.
 
 ## License
 
