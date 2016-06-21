@@ -326,13 +326,14 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 	Nmax := int(activeChain.MaxFreshStakePerBlock)
 	sort.Float64s(allFees)
 	var lowestMineableFee float64
-	var lowestMineableIdx int
+	// If no tickets, no valid index
+	var lowestMineableIdx = -1
 	if N >= Nmax {
 		lowestMineableIdx = N - Nmax
 		lowestMineableFee = allFees[lowestMineableIdx]
-	} else if N == 0 {
-		// If no tickets, no valid index
-		lowestMineableIdx = -1
+	} else if N != 0 {
+		lowestMineableIdx = 0
+		lowestMineableFee = allFees[0]
 	}
 
 	// Extract the fees for a window about the mileability threshold
