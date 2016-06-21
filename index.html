@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/github-light.css" media="screen">
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print">
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>dcrspy by chappjc</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>dcrspy</h1>
+        <h2>Don&#39;t stake blind.</h2>
+        <a href="https://github.com/chappjc/dcrspy" class="button"><small>View project on</small> GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <p><img src="http://img.shields.io/travis/chappjc/dcrspy.svg" alt="Travis">
+<img src="https://img.shields.io/github/release/chappjc/dcrspy.svg" alt="GitHub release"></p>
+
+<p>dcrspy is a program to continuously monitor and log changes in various data
+on the Decred network.  It works by connecting to both dcrd and dcrwallet
+and responding when a new block is detected via a <a href="https://godoc.org/github.com/decred/dcrrpcclient">notifier registered with
+dcrd over a websocket</a>.  Communication with dcrd and dcrwallet uses the <a href="https://github.com/decred/dcrd/blob/master/docs/json_rpc_api.md">Decred JSON-RPC API</a>.</p>
+
+<h2>
+<a id="types-of-data" class="anchor" href="#types-of-data" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Types of Data</h2>
+
+<p>The types of information monitored are:</p>
+
+<ul>
+<li>Block chain data (from dcrd)</li>
+<li>Stake and wallet information (from your wallet, optional).</li>
+<li>Mempool ticket info (from dcrd)</li>
+</ul>
+
+<p>A connection to dcrwallet is optional. Only block data will be obtained when no
+wallet connection is available.</p>
+
+<p>See <a href="#data-details">Data Details</a> below for more information.</p>
+
+<p>Transactions involving <strong>watched addresses</strong> may also be logged (using the
+<code>watchaddress</code> flag).  Watching for addresses receiving funds seems to be OK,
+but watching for sending funds from a watched address is experimental.</p>
+
+<h2>
+<a id="arbitrary-command-execution" class="anchor" href="#arbitrary-command-execution" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Arbitrary Command Execution</h2>
+
+<p>When dcrspy receives a new block notification from dcrd, data collection and
+recording is triggered. In addition, any system command may be executed in
+response to the new block.  The flags to specify the command and the arguments
+to be used are:</p>
+
+<pre><code>-c, --cmdname=         Command name to run. Must be on %PATH%.
+-a, --cmdargs=         Comma-separated list of arguments for command to run.
+                       The specifier %n is substituted for block number at
+                       execution, and %h is substituted for block hash.
+</code></pre>
+
+<p>The command name must be an executable (binary or script) on your shell's PATH,
+which is <code>$PATH</code> in *NIX, and <code>%PATH%</code> in Windows.</p>
+
+<p>TODO: Delay execution, or run after data saving is complete.</p>
+
+<h3>
+<a id="command-arguments" class="anchor" href="#command-arguments" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Command Arguments</h3>
+
+<p>Any arguments must be specified with
+cmdargs as a comma-separated list of strings.  For example:</p>
+
+<pre><code>-c ping -a "127.0.0.1,-n,8"
+</code></pre>
+
+<p>will execute the following on Linux:</p>
+
+<pre><code>/usr/bin/ping 127.0.0.1 -n 8
+</code></pre>
+
+<p>Specifying multiple arguments without commas, using spaces directly, is
+incorrect. For example, <code>-a "127.0.0.1 -n 8"</code> will not work.</p>
+
+<p>Note that if your command line arguments need to start with a dash (<code>-</code>) it is
+necessary to use the config file.  For example,</p>
+
+<pre><code>cmdname=ls
+cmdargs="-al"
+</code></pre>
+
+<h3>
+<a id="block-hash-and-height-substitution" class="anchor" href="#block-hash-and-height-substitution" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Block Hash and Height Substitution</h3>
+
+<p>The new block hash and height at the time of command execution may be included
+on the command line using %h and %n, which are substituted for block hash and
+number. For example,</p>
+
+<pre><code>cmdname=echo
+cmdargs="New best block hash: %h; height: %n"
+</code></pre>
+
+<p>results in the following log entries (date removed for brevity):</p>
+
+<pre><code>[INF] DCRD: Block height 36435 connected
+[INF] EXEC: New best block hash: 000000000000070f7a0593aee0728d6b3334c1e454da06efc0138008dc1b1cbd; height: 36435
+[INF] EXEC: Command execution complete (success).
+</code></pre>
+
+<p>Note that the above command used a semicolon since a comma would have indicated
+a second argument and been replaced with a space by echo.</p>
+
+<h3>
+<a id="command-logging" class="anchor" href="#command-logging" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Command Logging</h3>
+
+<p>User-specified system command execution uses the logging subsystem tagged with
+EXEC in the logs. Both stdout and stderr for the executed command are sent to
+the dcrspy log.  The end of command execution is also logged, as shown in the
+example above.</p>
+
+<h2>
+<a id="output" class="anchor" href="#output" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Output</h2>
+
+<p>Multiple destinations for the data are planned:</p>
+
+<ol>
+<li>
+<strong>stdout</strong>.  JSON-formatted data is send to stdout. <strong>DONE</strong>.</li>
+<li>
+<strong>File system</strong>.  JSON-formatted data is written to the file system. <strong>DONE</strong>.</li>
+<li>
+<strong>Database</strong>. Data is inserted into a MySQL database. NOT IMPLEMENTED.</li>
+<li>
+<strong>Plain text summary</strong>: balances, votes, current ticket price, mean fees, 
+wallet status. <strong>DONE</strong>.</li>
+<li>
+<strong>RESTful API</strong> over HTTPS. NOT IMPLEMENTED.</li>
+</ol>
+
+<p>Details of the JSON output may be found in <a href="#data-details">Data Details</a>.  The
+plain text summary looks something like the following (<em>wallet data redacted</em>):</p>
+
+<pre lang="none"><code>Block 35561:
+        Stake difficulty:                    22.663 -&gt; 22.663 (current -&gt; next block)
+        Estimated price in next window:      25.279 / [24.63, 26.68] ([min, max])
+        Window progress:   138 / 144  of price window number 246
+        Ticket fees:  0.0101, 0.0101, 0.0000 (mean, median, std), n=1
+        Ticket pool:  42048 (size), 17.721 (avg. price), 745115.63 (total DCR locked)
+
+Wallet and Stake Info at Height 35561:
+- Balances
+        Balances (spendable):     0.0000 (default),    0.0000 (all)
+        Balances (locked):      xxx.xxxx (default), xxxx.xxxx (all), xxxx.xxxx (imported)
+        Balances (any):        xxxx.xxxx (default), xxxx.xxxx (all)
+- Stake Info
+        ===&gt;  Mining enabled: true;  Unlocked: true  &lt;===
+        Mined tickets:        4 (immature),     43 (live)
+        mempool tickets:      0 (own),            6 (all)
+        Ticket price:      22.663  |    Window progress: 138 / 144
+        Wallet's price:     23.8100;  fee:   0.1940 / KiB
+        Totals:        541  votes,     919.84 subsidy
+                         1 missed,          1 revoked
+</code></pre>
+
+<p>Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
+not requested from dcrd, and thus not shown in the summary.  It is still
+present in JSON, but the values are {0, -1, -1}.  To get actualy ticket pool
+value, use <code>-p, --poolvalue</code>.</p>
+
+<h2>
+<a id="to-do" class="anchor" href="#to-do" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>TO-DO</h2>
+
+<p>dcrspy is functional, but also a <strong>work-in-progress</strong>.  However, I will try to keep
+<code>master</code> as stable as possible, and develop new features in separate branches.</p>
+
+<p>There is a <a href="https://drive.google.com/open?id=1Z057i7tGfnATWu0w7loetIkGElteNnlx2bJSxPvVOqE">very long to-do list</a>.</p>
+
+<h2>
+<a id="requirements" class="anchor" href="#requirements" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Requirements</h2>
+
+<ul>
+<li>
+<a href="http://golang.org">Go</a> 1.6 or newer.</li>
+<li>Running <code>dcrd</code> synchronized to the current best block on the network.</li>
+<li>(Optional, for stake info) <code>dcrwallet</code> connected to <code>dcrd</code>.</li>
+</ul>
+
+<h2>
+<a id="installation" class="anchor" href="#installation" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Installation</h2>
+
+<h3>
+<a id="build-from-source" class="anchor" href="#build-from-source" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Build from Source</h3>
+
+<ul>
+<li><p>Install Go:
+<a href="http://golang.org/doc/install">http://golang.org/doc/install</a></p></li>
+<li>
+<p>Verify Go installation:</p>
+
+<p><code>go env GOROOT GOPATH</code></p>
+</li>
+<li>
+<p>Build executable</p>
+
+<p><code>go get -u -v github.com/chappjc/dcrspy</code></p>
+</li>
+<li><p>Find dcrspy executable in <code>$GOPATH/bin</code>, and copy elsewhere (recommended).</p></li>
+</ul>
+
+<p>If you receive build errors, it may be due to "vendor" directories left by
+glide builds of dependencies such as dcrwallet.  You may safely delete vendor
+folders.</p>
+
+<h2>
+<a id="updating" class="anchor" href="#updating" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Updating</h2>
+
+<p>Run the same command used to build:</p>
+
+<p><code>go get -u -v github.com/chappjc/dcrspy</code></p>
+
+<h2>
+<a id="getting-started" class="anchor" href="#getting-started" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Getting Started</h2>
+
+<p>By default, dcrspy will monitor both block data and your wallet, and write a
+plain text summary of the data to stdout for each new block that is detected.</p>
+
+<p>There are several program options, which may be utilized via:</p>
+
+<ol>
+<li>Command line arguments</li>
+<li>Config file (e.g. dcrspy.conf)</li>
+</ol>
+
+<h3>
+<a id="command-line" class="anchor" href="#command-line" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Command line</h3>
+
+<p>Quick tips:</p>
+
+<ul>
+<li>Get a quick summary and exit, with <code>-e, --nomonitor</code>.</li>
+<li>Stay connected and monitor for new blocks, writting:
+
+<ul>
+<li>Plain text summary to stdout, with <code>-s, --summary</code>. </li>
+<li>JSON to stdout, with <code>-o, --save-jsonstdout</code>.</li>
+<li>JSON to file system, with <code>-j, --save-jsonfile</code>.</li>
+</ul>
+</li>
+<li>To monitor only block data (no wallet connection), use <code>--nostakeinfo</code>.</li>
+</ul>
+
+<p>The full list of command line switches is below, with current directory
+replaced by <code>...</code>:</p>
+
+<pre lang="none"><code>$ ./dcrspy -h
+Usage:
+  dcrspy [OPTIONS]
+
+Application Options:
+  -C, --configfile=      Path to configuration file (.../dcrspy.conf)
+  -V, --version          Display version information and exit
+      --testnet          Use the test network (default mainnet)
+      --simnet           Use the simulation test network (default mainnet)
+  -d, --debuglevel=      Logging level {trace, debug, info, warn, error, critical} (info)
+  -q, --quiet            Easy way to set debuglevel to error
+      --logdir=          Directory to log output (.../logs)
+  -c, --cmdname=         Command name to run. Must be on %PATH%.
+  -a, --cmdargs=         Comma-separated list of aruguments for command to run.
+  -e, --nomonitor        Do not launch monitors. Display current data and (e)xit.
+  -m, --mempool            Monitor mempool for new transactions, and report ticketfee info when new tickets are added.
+      --mp-min-interval=   The minimum time in seconds between mempool reports, regarless of number of new tickets seen. (4)
+      --mp-max-interval=   The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen. (120)
+      --mp-ticket-trigger= The number minimum number of new tickets that must be seen to trigger a new mempool report. (4)
+      --noblockdata      Do not collect block data (default false)
+      --nostakeinfo      Do not collect stake info data (default false)
+  -p, --poolvalue        Collect ticket pool value information (8-9 sec).
+  -f, --outfolder=       Folder for file outputs (.../spydata)
+  -w, --watchaddress=      Decred address for which to watch for incoming transactions. One per line.
+  -s, --summary          Write plain text summary of key data to stdout
+  -o, --save-jsonstdout  Save JSON-formatted data to stdout
+  -j, --save-jsonfile    Save JSON-formatted data to file
+      --dcrduser=        Daemon RPC user name
+      --dcrdpass=        Daemon RPC password
+      --dcrdserv=        Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet: localhost:19556)
+      --dcrdcert=        File containing the dcrd certificate file (~/.dcrd/rpc.cert)
+      --dcrwuser=        Wallet RPC user name
+      --dcrwpass=        Wallet RPC password
+      --dcrwserv=        Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet: localhost:19557)
+      --dcrwcert=        File containing the dcrwallet certificate file (~/.dcrwallet/rpc.cert)
+      --noclienttls      Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost
+      --accountname=     Name of the account from (default: default) (default)
+      --ticketaddress=   Address to which you have given voting rights
+      --pooladdress=     Address to which you have given rights to pool fees
+
+Help Options:
+  -h, --help             Show this help message
+</code></pre>
+
+<h3>
+<a id="config-file" class="anchor" href="#config-file" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Config file</h3>
+
+<p>All command line switches may be placed into the config file, which is
+dcrspy.conf by default.</p>
+
+<div class="highlight highlight-source-ini"><pre><span class="pl-en">[Application Options]</span>
+
+<span class="pl-k">debuglevel</span>=debug
+
+<span class="pl-c">;cmdname=echo</span>
+<span class="pl-c">;cmdargs="New best block hash: %h; height: %n"</span>
+<span class="pl-c">;cmdname=ping</span>
+<span class="pl-c">;cmdargs="127.0.0.1,-n,8"</span>
+
+<span class="pl-c">; Monitor mempool for new tickets, displaying fees</span>
+<span class="pl-c">;mempool=true</span>
+<span class="pl-c">;mp-min-interval=4</span>
+<span class="pl-c">;mp-max-interval=120</span>
+<span class="pl-c">;mp-ticket-trigger=4</span>
+
+<span class="pl-c">; Addresses to watch for incoming transactions</span>
+<span class="pl-c">; Decred developer (C0) address</span>
+<span class="pl-c">;watchaddress=Dcur2mcGjmENx4DhNqDctW5wJCVyT3Qeqkx</span>
+<span class="pl-c">; Some larger mining pool addresses:</span>
+<span class="pl-c">;watchaddress=DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ</span>
+<span class="pl-c">;watchaddress=DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4</span>
+<span class="pl-c">;watchaddress=DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW</span>
+<span class="pl-c">;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus</span>
+<span class="pl-c">;watchaddress=DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE</span>
+
+<span class="pl-c">; Ticket pool value takes a long time, 8-9 sec, so the default is false.</span>
+<span class="pl-c">;poolvalue=false</span>
+
+<span class="pl-c">; Default outfolder is a folder called "dcrspy" in the working directory.</span>
+<span class="pl-c">; Change this with the outfolder option:</span>
+<span class="pl-c">; Windows</span>
+<span class="pl-c">; outfolder=%appdata%/dcrspy/spydata</span>
+<span class="pl-c">; Linux</span>
+<span class="pl-c">; outfolder=$HOME/dcrspy/spydata</span>
+
+<span class="pl-c">; Uncomment for testnet</span>
+<span class="pl-c">;testnet=1</span>
+<span class="pl-c">; But also remember ports below, or do not specify for network defaults.</span>
+
+<span class="pl-k">dcrduser</span>=duser
+<span class="pl-k">dcrdpass</span>=asdfExample
+
+<span class="pl-k">dcrdserv</span>=localhost:9109
+<span class="pl-k">dcrdcert</span>=/home/me/.dcrd/rpc.cert
+
+<span class="pl-k">dcrwuser</span>=wuser
+<span class="pl-k">dcrwpass</span>=qwertyExample
+
+<span class="pl-k">dcrwserv</span>=localhost:9110
+<span class="pl-k">dcrwcert</span>=/home/me/.dcrwallet/rpc.cert</pre></div>
+
+<h2>
+<a id="data-details" class="anchor" href="#data-details" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Data Details</h2>
+
+<p>Block chain data obtained from dcrd includes several types of data.  The JSON
+file written by dcrspy for block data is named <code>block-data-[BLOCKNUM].json</code>. It
+contains a single JSON object, with each data type as a tagged JSON child
+object.</p>
+
+<ol>
+<li>
+<p>Block header (hash, voters, height, difficulty, nonce, time, etc.)</p>
+
+<div class="highlight highlight-source-json"><pre><span class="pl-s"><span class="pl-pds">"</span>block_header<span class="pl-pds">"</span></span>: {
+<span class="pl-s"><span class="pl-pds">"</span>hash<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>00000000000014c19867d5cd0f60d9409cd9e4ea68f656dac50befa756866cf8<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>confirmations<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+<span class="pl-s"><span class="pl-pds">"</span>version<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+<span class="pl-s"><span class="pl-pds">"</span>previousblockhash<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>00000000000010c295f2e808af78d8240c3365d9d52b28e2061f9a55ce9dcd29<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>merkleroot<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>731c342c75237fe72e2d27a6820f6384498add97f96dcef9c6f2fd558a80f4c9<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>stakeroot<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>c3d75f22a1e9bb4b50155f95d9b7a977f7ed1ecaf05024e157a77d7b5697fe04<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>votebits<span class="pl-pds">"</span></span>: <span class="pl-c1">1</span>,
+<span class="pl-s"><span class="pl-pds">"</span>finalstate<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>6acc9d2694f3<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>voters<span class="pl-pds">"</span></span>: <span class="pl-c1">5</span>,
+<span class="pl-s"><span class="pl-pds">"</span>freshstake<span class="pl-pds">"</span></span>: <span class="pl-c1">3</span>,
+<span class="pl-s"><span class="pl-pds">"</span>revocations<span class="pl-pds">"</span></span>: <span class="pl-c1">0</span>,
+<span class="pl-s"><span class="pl-pds">"</span>poolsize<span class="pl-pds">"</span></span>: <span class="pl-c1">42084</span>,
+<span class="pl-s"><span class="pl-pds">"</span>bits<span class="pl-pds">"</span></span>: <span class="pl-s"><span class="pl-pds">"</span>1a166536<span class="pl-pds">"</span></span>,
+<span class="pl-s"><span class="pl-pds">"</span>sbits<span class="pl-pds">"</span></span>: <span class="pl-c1">22.66271576</span>,
+<span class="pl-s"><span class="pl-pds">"</span>height<span class="pl-pds">"</span></span>: <span class="pl-c1">35552</span>,
+<span class="pl-s"><span class="pl-pds">"</span>size<span class="pl-pds">"</span></span>: <span class="pl-c1">3764</span>,
+<span class="pl-s"><span class="pl-pds">"</span>time<span class="pl-pds">"</span></span>: <span class="pl-c1">1465510687</span>,
+<span class="pl-s"><span class="pl-pds">"</span>nonce<span class="pl-pds">"</span></span>: <span class="pl-c1">2821830658</span>,
+<span class="pl-s"><span class="pl-pds">"</span>difficulty<span class="pl-pds">"</span></span>: <span class="pl-c1">749126.76453394</span>
+}</pre></div>
+</li>
+<li>
+<p>Ticket pool info.  This is a custom data structure.</p>
+
+<div class="highlight highlight-source-json"><pre><span class="pl-s"><span class="pl-pds">"</span>ticket_pool_info<span class="pl-pds">"</span></span>: {
+<span class="pl-s"><span class="pl-pds">"</span>poolsize<span class="pl-pds">"</span></span>: <span class="pl-c1">42084</span>,
+<span class="pl-s"><span class="pl-pds">"</span>poolvalue<span class="pl-pds">"</span></span>: <span class="pl-c1">745705.38747115</span>,
+<span class="pl-s"><span class="pl-pds">"</span>poolvalavg<span class="pl-pds">"</span></span>: <span class="pl-c1">17.71945127</span>
+}</pre></div>
+</li>
+<li>
+<p>Ticket fee info (block).  This is the usual output of <code>ticketfeeinfo</code> with
+no extra arguments:</p>
+
+<div class="highlight highlight-source-json"><pre><span class="pl-s"><span class="pl-pds">"</span>ticketfeeinfo_block<span class="pl-pds">"</span></span>: {
+<span class="pl-s"><span class="pl-pds">"</span>height<span class="pl-pds">"</span></span>: <span class="pl-c1">35552</span>,
+<span class="pl-s"><span class="pl-pds">"</span>number<span class="pl-pds">"</span></span>: <span class="pl-c1">3</span>,
+<span class="pl-s"><span class="pl-pds">"</span>min<span class="pl-pds">"</span></span>: <span class="pl-c1">0.01010101</span>,
+<span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>: <span class="pl-c1">0.01013513</span>,
+<span class="pl-s"><span class="pl-pds">"</span>mean<span class="pl-pds">"</span></span>: <span class="pl-c1">0.01011238</span>,
+<span class="pl-s"><span class="pl-pds">"</span>median<span class="pl-pds">"</span></span>: <span class="pl-c1">0.01010101</span>,
+<span class="pl-s"><span class="pl-pds">"</span>stddev<span class="pl-pds">"</span></span>: <span class="pl-c1">1.97e-05</span>
+}</pre></div>
+</li>
+<li>
+<p>Current and estimated stake difficulty.  These are the usual outputs of
+<code>estimatestakediff</code> and <code>getstakedifficulty</code>:</p>
+
+<div class="highlight highlight-source-json"><pre><span class="pl-s"><span class="pl-pds">"</span>estimatestakediff<span class="pl-pds">"</span></span>: {
+<span class="pl-s"><span class="pl-pds">"</span>min<span class="pl-pds">"</span></span>: <span class="pl-c1">23.80700879</span>,
+<span class="pl-s"><span class="pl-pds">"</span>max<span class="pl-pds">"</span></span>: <span class="pl-c1">28.94194858</span>,
+<span class="pl-s"><span class="pl-pds">"</span>expected<span class="pl-pds">"</span></span>: <span class="pl-c1">25.46730598</span>
+},
+<span class="pl-s"><span class="pl-pds">"</span>currentstakediff<span class="pl-pds">"</span></span>: {
+<span class="pl-s"><span class="pl-pds">"</span>current<span class="pl-pds">"</span></span>: <span class="pl-c1">22.66271576</span>,
+<span class="pl-s"><span class="pl-pds">"</span>next<span class="pl-pds">"</span></span>: <span class="pl-c1">22.66271576</span>
+}</pre></div>
+</li>
+</ol>
+
+<p>Wallet data is stored in a similar manner in file <code>stake-info-[BLOCKNUM].json</code>.
+There are three data types, tagged <code>"getstakeinfo</code>", <code>"walletinfo"</code>, and
+<code>"balances"</code>.  TODO: Update this README with a testnet example output.</p>
+
+<h2>
+<a id="issue-tracker" class="anchor" href="#issue-tracker" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>Issue Tracker</h2>
+
+<p>Please report any issues using the <a href="https://github.com/chappjc/dcrspy/issues">GitHub issue tracker</a>.</p>
+
+<h2>
+<a id="license" class="anchor" href="#license" aria-hidden="true"><span aria-hidden="true" class="octicon octicon-link"></span></a>License</h2>
+
+<p>dcrspy is licensed under the <a href="http://copyfree.org">copyfree</a> ISC License.</p>
+
+<p>dcrspy borrows its logging and config file facilities, plus some boilerplate
+code in main.go, from the dcrticketbuyer project by the Decred developers.
+The rest is by chappjc.</p>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/chappjc/dcrspy/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/chappjc/dcrspy/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/chappjc/dcrspy"></a> is maintained by <a href="https://github.com/chappjc">chappjc</a>.</p>
+
+          <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+  
+  </body>
+</html>
