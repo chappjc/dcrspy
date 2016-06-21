@@ -77,6 +77,7 @@ type config struct {
 	MempoolMinInterval int    `long:"mp-min-interval" description:"The minimum time in seconds between mempool reports, regarless of number of new tickets seen."`
 	MempoolMaxInterval int    `long:"mp-max-interval" description:"The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen."`
 	MPTriggerTickets   int    `long:"mp-ticket-trigger" description:"The number minimum number of new tickets that must be seen to trigger a new mempool report."`
+	FeeWinRadius       int    `short:"r" long:"feewinradius" description:"Half-width of a window around the ticket with the lowest mineable fee."`
 	NoCollectBlockData bool   `long:"noblockdata" description:"Do not collect block data (default false)"`
 	NoCollectStakeInfo bool   `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
 	PoolValue          bool   `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
@@ -89,8 +90,6 @@ type config struct {
 	SaveJSONFile   bool `short:"j" long:"save-jsonfile" description:"Save JSON-formatted data to file"`
 	//SaveMongoDB        bool    `short:"g" long:"save-mongo" description:"Save data to MongoDB"`
 	//SaveMySQL          bool    `short:"q" long:"save-mysql" description:"Save data to MySQL"`
-
-	FeeWinRadius int `long:"feewinradius" description:"Half-width of a window around the ticket with the lowest mineable fee."`
 
 	// RPC client options
 	DcrdUser         string `long:"dcrduser" description:"Daemon RPC user name"`
