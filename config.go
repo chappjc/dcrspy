@@ -49,7 +49,7 @@ var (
 	defaultMempoolMaxInterval = 120
 	defaultMPTriggerTickets   = 4
 
-	defaultFeeWinRadius = 5
+	defaultFeeWinRadius = 0
 
 	defaultAccountName    = "default"
 	defaultTicketAddress  = ""

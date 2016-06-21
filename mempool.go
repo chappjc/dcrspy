@@ -504,7 +504,7 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	mempoolTicketFees := data.ticketfees.FeeInfoMempool
 
 	// time.Now().UTC().Format(time.UnixDate)
-	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.4f, %.4f, %.4f, %.4f (l/m, mean, median, std), n=%d\n",
+	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.5f, %.4f, %.4f, %.4f (l/m, mean, median, std), n=%d\n",
 		time.Now().Format("2006-01-02 15:04:05.00 -0700 MST"), data.height,
 		data.minableFees.lowestMineableFee,
 		mempoolTicketFees.Mean, mempoolTicketFees.Median,
@@ -524,6 +524,10 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	// distance input from configuration
 	w := s.feeWindowRadius
 
+	if w < 1 {
+		return err
+	}
+
 	lowEnd := boundIdx - w
 	if lowEnd < 0 {
 		lowEnd = 0
@@ -537,7 +541,7 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	lowerFees = data.minableFees.all[lowEnd:boundIdx]
 	upperFees = data.minableFees.all[boundIdx+1 : highEnd]
 
-	fmt.Printf("Mineable tickets, limit -%d/+%d:\t%.5f --> %.5f (threshold) --> %.5f\n",
+	_, err = fmt.Printf("Mineable tickets, limit -%d/+%d:\t%.5f --> %.5f (threshold) --> %.5f\n",
 		len(lowerFees), len(upperFees), lowerFees,
 		data.minableFees.lowestMineableFee, upperFees)
 
