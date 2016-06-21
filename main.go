@@ -432,7 +432,7 @@ func main() {
 
 	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutex)
 	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutex)
-	summarySaverMempool := NewMempoolDataToSummaryStdOut(saverMutex)
+	summarySaverMempool := NewMempoolDataToSummaryStdOut(cfg.FeeWinRadius, saverMutex)
 
 	if cfg.SummaryOut {
 		blockDataSavers = append(blockDataSavers, summarySaverBlockData)

@@ -142,19 +142,8 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 				mempoolLog.Errorf("Could not get raw mempool: %v", err.Error())
 				continue
 			}
-			p.mpoolInfo.numTicketPurchasesInMempool = uint32(len(ticketHashes))
-
-			// Just playing with getting all fees
-			// mempoolTickets[ticketHashes[0].String()].Fee
-			// mempoolTickets, err := client.GetRawMempoolVerbose(dcrjson.GRMTickets)
-			// allFees := make([]float64, 0, len(ticketHashes))
-			// for _, t := range mempoolTickets {
-			// 	txSize := float64(t.Size)
-			// 	allFees = append(allFees, t.Fee / txSize * 1000)
-			// }
-			// medianFee := MedianCoin(allFees)
-			// mempoolLog.Infof("Median fee computed: %v (%v)", medianFee,
-			// 	len(ticketHashes))
+			N := len(ticketHashes)
+			p.mpoolInfo.numTicketPurchasesInMempool = uint32(N)
 
 			// Decide if it is time to collect and record new data
 			// 1. Get block height
@@ -253,11 +242,19 @@ func (p *mempoolMonitor) maybeCollect(txHeight uint32) (*mempoolData, error) {
 
 // COLLECTOR
 
+type minableFeeInfo struct {
+	all               []float64
+	lowestMineableIdx int
+	lowestMineableFee float64
+	targetFeeWindow   []float64
+}
+
 type mempoolData struct {
-	height     uint32
-	numTickets uint32
-	newTickets uint32
-	ticketfees *dcrjson.TicketFeeInfoResult
+	height      uint32
+	numTickets  uint32
+	newTickets  uint32
+	ticketfees  *dcrjson.TicketFeeInfoResult
+	minableFees *minableFeeInfo
 }
 
 type mempoolDataCollector struct {
@@ -288,13 +285,58 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 		mempoolLog.Tracef("mempoolDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
-	height, err := t.dcrdChainSvr.GetBlockCount()
+	// client
+	c := t.dcrdChainSvr
+
+	// mempoolTickets[ticketHashes[0].String()].Fee
+	mempoolTickets, err := c.GetRawMempoolVerbose(dcrjson.GRMTickets)
+	N := len(mempoolTickets)
+	allFees := make([]float64, 0, N)
+	for _, t := range mempoolTickets {
+		txSize := float64(t.Size)
+		allFees = append(allFees, t.Fee/txSize*1000)
+	}
+	//medianFee := MedianCoin(allFees)
+	//mempoolLog.Infof("Median fee computed: %v (%v)", medianFee, N)
+
+	Nmax := int(activeChain.MaxFreshStakePerBlock)
+	sort.Float64s(allFees)
+	var lowestMineableFee float64
+	var lowestMineableIdx int
+	if N >= Nmax {
+		lowestMineableIdx = N - Nmax
+		lowestMineableFee = allFees[lowestMineableIdx]
+	} else if N == 0 {
+		lowestMineableIdx = -1
+	}
+
+	var targetFeeWindow []float64
+	if N > 0 {
+		lowEnd := lowestMineableIdx - 5
+		if lowEnd < 0 {
+			lowEnd = 0
+		}
+		highEnd := lowestMineableIdx + 5
+		if highEnd > N {
+			highEnd = N
+		}
+		targetFeeWindow = allFees[lowEnd:highEnd]
+	}
+
+	mineables := &minableFeeInfo{
+		allFees,
+		lowestMineableIdx,
+		lowestMineableFee,
+		targetFeeWindow,
+	}
+
+	height, err := c.GetBlockCount()
 
 	// Fee info
 	numFeeBlocks := uint32(0)
 	numFeeWindows := uint32(0)
 
-	feeInfo, err := t.dcrdChainSvr.TicketFeeInfo(&numFeeBlocks, &numFeeWindows)
+	feeInfo, err := c.TicketFeeInfo(&numFeeBlocks, &numFeeWindows)
 	if err != nil {
 		return nil, err
 	}
@@ -302,9 +344,10 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 	//feeInfoMempool := feeInfo.FeeInfoMempool
 
 	mpoolData := &mempoolData{
-		height:     uint32(height),
-		numTickets: feeInfo.FeeInfoMempool.Number,
-		ticketfees: feeInfo,
+		height:      uint32(height),
+		numTickets:  feeInfo.FeeInfoMempool.Number,
+		ticketfees:  feeInfo,
+		minableFees: mineables,
 	}
 
 	return mpoolData, err
@@ -326,7 +369,8 @@ type MempoolDataToJSONStdOut struct {
 // MempoolDataToSummaryStdOut implements MempoolDataSaver interface for plain text
 // summary to stdout
 type MempoolDataToSummaryStdOut struct {
-	mtx *sync.Mutex
+	mtx             *sync.Mutex
+	feeWindowRadius int
 }
 
 // MempoolDataToJSONFiles implements MempoolDataSaver interface for JSON output to
@@ -355,14 +399,14 @@ func NewMempoolDataToJSONStdOut(m ...*sync.Mutex) *MempoolDataToJSONStdOut {
 
 // NewMempoolDataToSummaryStdOut creates a new MempoolDataToSummaryStdOut with optional
 // existing mutex
-func NewMempoolDataToSummaryStdOut(m ...*sync.Mutex) *MempoolDataToSummaryStdOut {
+func NewMempoolDataToSummaryStdOut(feeWindowRadius int, m ...*sync.Mutex) *MempoolDataToSummaryStdOut {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
 	if len(m) > 0 {
-		return &MempoolDataToSummaryStdOut{m[0]}
+		return &MempoolDataToSummaryStdOut{m[0], feeWindowRadius}
 	}
-	return &MempoolDataToSummaryStdOut{}
+	return &MempoolDataToSummaryStdOut{nil, feeWindowRadius}
 }
 
 // NewMempoolDataToJSONFiles creates a new MempoolDataToJSONFiles with optional
@@ -428,10 +472,35 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	mempoolTicketFees := data.ticketfees.FeeInfoMempool
 
 	// time.Now().UTC().Format(time.UnixDate)
-	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
+	_, err := fmt.Printf("%v - Mempool ticket fees (%v):  %.4f, %.4f, %.4f, %.4f (l/m, mean, median, std), n=%d\n",
 		time.Now().Format("2006-01-02 15:04:05.00 -0700 MST"), data.height,
+		data.minableFees.lowestMineableFee,
 		mempoolTicketFees.Mean, mempoolTicketFees.Median,
 		mempoolTicketFees.StdDev, mempoolTicketFees.Number)
+
+	boundIdx := data.minableFees.lowestMineableIdx
+	N := len(data.minableFees.all)
+
+	var upperFees, lowerFees []float64
+	w := s.feeWindowRadius
+	if N > 2 {
+		lowEnd := boundIdx - w
+		if lowEnd < 0 {
+			lowEnd = 0
+		}
+		highEnd := boundIdx + w + 1 // +1 for slice indexing
+		if highEnd > N {
+			highEnd = N
+		}
+
+		lowerFees = data.minableFees.all[lowEnd:boundIdx]
+		upperFees = data.minableFees.all[boundIdx+1 : highEnd]
+	}
+
+	if N > 1 {
+		fmt.Printf("Mineable tickets, limit -%d/+%d:\t%.5f --> %.5f (threshold) --> %.5f\n",
+			len(lowerFees), len(upperFees), lowerFees, data.minableFees.lowestMineableFee, upperFees)
+	}
 
 	return err
 }

@@ -49,6 +49,8 @@ var (
 	defaultMempoolMaxInterval = 120
 	defaultMPTriggerTickets   = 4
 
+	defaultFeeWinRadius = 5
+
 	defaultAccountName    = "default"
 	defaultTicketAddress  = ""
 	defaultPoolAddress    = ""
@@ -88,6 +90,8 @@ type config struct {
 	//SaveMongoDB        bool    `short:"g" long:"save-mongo" description:"Save data to MongoDB"`
 	//SaveMySQL          bool    `short:"q" long:"save-mysql" description:"Save data to MySQL"`
 
+	FeeWinRadius int `long:"feewinradius" description:"Half-width of a window around the ticket with the lowest mineable fee."`
+
 	// RPC client options
 	DcrdUser         string `long:"dcrduser" description:"Daemon RPC user name"`
 	DcrdPass         string `long:"dcrdpass" description:"Daemon RPC password"`
@@ -117,6 +121,7 @@ var (
 		MempoolMinInterval: defaultMempoolMinInterval,
 		MempoolMaxInterval: defaultMempoolMaxInterval,
 		MPTriggerTickets:   defaultMPTriggerTickets,
+		FeeWinRadius:       defaultFeeWinRadius,
 		AccountName:        defaultAccountName,
 		TicketAddress:      defaultTicketAddress,
 		PoolAddress:        defaultPoolAddress,
