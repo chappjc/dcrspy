@@ -403,7 +403,8 @@ func main() {
 
 	// Saver mutex, to share the same underlying output resource between block
 	// and stake info data savers
-	saverMutex := new(sync.Mutex)
+	saverMutexTerm := new(sync.Mutex)
+	saverMutexFiles := new(sync.Mutex)
 
 	// Build a slice of each required saver type for each data source
 	var blockDataSavers []BlockDataSaver
@@ -411,18 +412,18 @@ func main() {
 	var mempoolSavers []MempoolDataSaver
 	// JSON to stdout
 	if cfg.SaveJSONStdout {
-		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutex))
-		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutex))
-		mempoolSavers = append(mempoolSavers, NewMempoolDataToJSONStdOut(saverMutex))
+		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutexTerm))
+		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutexTerm))
+		mempoolSavers = append(mempoolSavers, NewMempoolDataToJSONStdOut(saverMutexTerm))
 	}
 	// JSON to file
 	if cfg.SaveJSONFile {
 		blockDataSavers = append(blockDataSavers,
-			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutex))
+			NewBlockDataToJSONFiles(cfg.OutFolder, "block_data-", saverMutexFiles))
 		stakeInfoDataSavers = append(stakeInfoDataSavers,
-			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutex))
+			NewStakeInfoDataToJSONFiles(cfg.OutFolder, "stake-info-", saverMutexFiles))
 		mempoolSavers = append(mempoolSavers,
-			NewMempoolDataToJSONFiles(cfg.OutFolder, "mempool-info-", saverMutex))
+			NewMempoolDataToJSONFiles(cfg.OutFolder, "mempool-info-", saverMutexFiles))
 	}
 
 	// If no savers specified, enable Summary Output
@@ -430,14 +431,20 @@ func main() {
 		cfg.SummaryOut = true
 	}
 
-	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutex)
-	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutex)
-	summarySaverMempool := NewMempoolDataToSummaryStdOut(cfg.FeeWinRadius, saverMutex)
+	summarySaverBlockData := NewBlockDataToSummaryStdOut(saverMutexTerm)
+	summarySaverStakeInfo := NewStakeInfoDataToSummaryStdOut(saverMutexTerm)
+	summarySaverMempool := NewMempoolDataToSummaryStdOut(cfg.FeeWinRadius, saverMutexTerm)
 
 	if cfg.SummaryOut {
 		blockDataSavers = append(blockDataSavers, summarySaverBlockData)
 		stakeInfoDataSavers = append(stakeInfoDataSavers, summarySaverStakeInfo)
 		mempoolSavers = append(mempoolSavers, summarySaverMempool)
+	}
+
+	if cfg.DumpAllMPTix {
+		log.Debugf("Dumping all mempool tickets to file in %s.\n", cfg.OutFolder)
+		mempoolFeeDumper := NewMempoolFeeDumper(cfg.OutFolder, "mempool-fees", saverMutexFiles)
+		mempoolSavers = append(mempoolSavers, mempoolFeeDumper)
 	}
 
 	// Block data collector

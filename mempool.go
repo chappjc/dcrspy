@@ -255,7 +255,7 @@ func (p *mempoolMonitor) maybeCollect(txHeight uint32) (*mempoolData, error) {
 // Fees for tickets in mempool that are near top
 type minableFeeInfo struct {
 	// All fees in mempool
-	all []float64
+	allFees []float64
 	// The index of the 20th largest fee, or largest if number in mempool < 20
 	lowestMineableIdx int
 	// The corresponding fee (i.e. all[lowestMineableIdx])
@@ -264,6 +264,7 @@ type minableFeeInfo struct {
 	targetFeeWindow []float64
 }
 
+// Stakelimitfeeinfo JSON output
 type Stakelimitfeeinfo struct {
 	Stakelimitfee float64 `json:"stakelimitfee"`
 	// others...
@@ -412,6 +413,12 @@ type MempoolDataToJSONFiles struct {
 	fileSaver
 }
 
+// MempoolFeeDumper implements MempoolDataSaver interface for a complete file
+// dump of all ticket fees to the file system
+type MempoolFeeDumper struct {
+	fileSaver
+}
+
 // MempoolDataToMySQL implements MempoolDataSaver interface for output to a
 // MySQL database
 type MempoolDataToMySQL struct {
@@ -440,6 +447,30 @@ func NewMempoolDataToSummaryStdOut(feeWindowRadius int, m ...*sync.Mutex) *Mempo
 		return &MempoolDataToSummaryStdOut{m[0], feeWindowRadius}
 	}
 	return &MempoolDataToSummaryStdOut{nil, feeWindowRadius}
+}
+
+// NewMempoolFeeDumper creates a new MempoolFeeDumper with optional
+// existing mutex
+func NewMempoolFeeDumper(folder string, fileBase string, m ...*sync.Mutex) *MempoolFeeDumper {
+	if len(m) > 1 {
+		panic("Too many inputs.")
+	}
+
+	var mtx *sync.Mutex
+	if len(m) > 0 {
+		mtx = m[0]
+	} else {
+		mtx = new(sync.Mutex)
+	}
+
+	return &MempoolFeeDumper{
+		fileSaver: fileSaver{
+			folder:   folder,
+			nameBase: fileBase,
+			file:     os.File{},
+			mtx:      mtx,
+		},
+	}
 }
 
 // NewMempoolDataToJSONFiles creates a new MempoolDataToJSONFiles with optional
@@ -514,7 +545,7 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	// Inspect a range of ticket fees in the sorted list, about the 20th
 	// largest or the largest if less than 20 tickets in mempool.
 	boundIdx := data.minableFees.lowestMineableIdx
-	N := len(data.minableFees.all)
+	N := len(data.minableFees.allFees)
 
 	if N < 2 {
 		return err
@@ -539,8 +570,8 @@ func (s *MempoolDataToSummaryStdOut) Store(data *mempoolData) error {
 	}
 
 	// center value not included in upper/lower windows
-	lowerFees = data.minableFees.all[lowEnd:boundIdx]
-	upperFees = data.minableFees.all[boundIdx+1 : highEnd]
+	lowerFees = data.minableFees.allFees[lowEnd:boundIdx]
+	upperFees = data.minableFees.allFees[boundIdx+1 : highEnd]
 
 	_, err = fmt.Printf("Mineable tickets, limit -%d/+%d:\t%.5f --> %.5f (threshold) --> %.5f\n",
 		len(lowerFees), len(upperFees), lowerFees,
@@ -583,6 +614,46 @@ func (s *MempoolDataToJSONFiles) Store(data *mempoolData) error {
 	_, err = writeFormattedJSONMempoolData(jsonConcat, &s.file)
 	if err != nil {
 		mempoolLog.Error("Write JSON mempool data to file: ", *fp)
+	}
+
+	return err
+}
+
+// Store writes all the ticket fees to a file
+// The file name is nameBase+".json".
+func (s *MempoolFeeDumper) Store(data *mempoolData) error {
+	// Do not write JSON data if there are no new tickets since last report
+	// if data.newTickets == 0 {
+	// 	return nil
+	// }
+
+	if s.mtx != nil {
+		s.mtx.Lock()
+		defer s.mtx.Unlock()
+	}
+
+	// Write fees to a file with block height in the name
+	//fname := fmt.Sprintf("%s%d-%d.json", s.nameBase, data.height, data.numTickets)
+	fname := fmt.Sprintf("%s.json", s.nameBase)
+	fullfile := filepath.Join(s.folder, fname)
+	fp, err := os.Create(fullfile)
+	defer fp.Close()
+	if err != nil {
+		mempoolLog.Errorf("Unable to open file %v for writting.", fullfile)
+		return err
+	}
+
+	mempoolLog.Debug("Writting all fees.")
+	j, err := json.MarshalIndent(struct {
+		AllFees  []float64
+		DateTime string
+	}{
+		data.minableFees.allFees,
+		time.Now().UTC().Format(time.RFC822)}, "", "    ")
+	s.file = *fp
+	_, err = fmt.Fprintln(&s.file, string(j))
+	if err != nil {
+		mempoolLog.Error("Write mempool ticket fees data to file: ", *fp)
 	}
 
 	return err
