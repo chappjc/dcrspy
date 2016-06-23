@@ -645,9 +645,11 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 
 	mempoolLog.Debug("Writting all fees.")
 	j, err := json.MarshalIndent(struct {
-		AllFees  []float64
-		DateTime string
+		N        int       `json:"n"`
+		AllFees  []float64 `json:"allfees"`
+		DateTime string    `json:"datetime"`
 	}{
+		len(data.minableFees.allFees),
 		data.minableFees.allFees,
 		time.Now().UTC().Format(time.RFC822)}, "", "    ")
 	s.file = *fp
