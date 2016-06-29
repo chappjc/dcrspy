@@ -45,15 +45,22 @@ type watchedAddrTx struct {
 
 const (
 	// blockConnChanBuffer is the size of the block connected channel buffer.
-	blockConnChanBuffer = 100
+	blockConnChanBuffer = 8
+	// newTxChanBuffer is the size of the new transaction channel buffer
+	newTxChanBuffer = 2000
+	// recvTxChanBuffer is the size of the receive transaction channel buffer
+	recvTxChanBuffer = 128
+	// sendTxChanBuffer is the size of the send transaction channel buffer
+	sendTxChanBuffer = 128
 )
 
-func main() {
+// mainCore does all the work. Deferred functions do not run after os.Exit().
+func mainCore() int {
 	// Parse the configuration file.
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Failed to load dcrspy config: %s\n", err.Error())
-		os.Exit(1)
+		return 1
 	}
 	defer backendLog.Flush()
 
@@ -66,7 +73,7 @@ func main() {
 	if err != nil {
 		fmt.Printf("Failed to create data output folder %s. Error: %s\n",
 			cfg.OutFolder, err.Error())
-		os.Exit(1)
+		return 2
 	}
 
 	// Connect to dcrd RPC server using websockets. Set up the
@@ -92,21 +99,24 @@ func main() {
 
 	var newTxChan chan *chainhash.Hash
 	if cfg.MonitorMempool {
-		newTxChan = make(chan *chainhash.Hash, 80)
+		newTxChan = make(chan *chainhash.Hash, newTxChanBuffer)
 	}
 
 	// watchaddress
 	var recvTxChan, spendTxChan chan *watchedAddrTx
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
-		recvTxChan = make(chan *watchedAddrTx, 80)
-		spendTxChan = make(chan *watchedAddrTx, 80)
+		recvTxChan = make(chan *watchedAddrTx, recvTxChanBuffer)
+		spendTxChan = make(chan *watchedAddrTx, sendTxChanBuffer)
 	}
 
+	// Like connectChan for block data, connectChanStkInf is used when a new
+	// block is connected, but to signal the stake info monitor.
 	var connectChanStkInf chan int32
 	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
 		connectChanStkInf = make(chan int32, blockConnChanBuffer)
 	}
 
+	// Arbitrary command execution
 	cmdName := cfg.CmdName // e.g. "ping"
 	args := cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
 
@@ -115,7 +125,8 @@ func main() {
 			time time.Time, vb uint16) {
 			select {
 			case connectChan <- height:
-				// Past this point in this case is command execution
+				// Past this point in this case is command execution. Block
+				// height was sent on connectChan, so move on if no command.
 				if len(cmdName) == 0 {
 					break
 				}
@@ -159,6 +170,8 @@ func main() {
 			// send to nil channel blocks
 			default:
 			}
+
+			// Also send on stake info channel, if enabled.
 			select {
 			case connectChanStkInf <- height:
 			// send to nil channel blocks
@@ -173,7 +186,7 @@ func main() {
 			default:
 			}
 		},
-		//
+		// TODO
 		OnWinningTickets: func(blockHash *chainhash.Hash, blockHeight int64,
 			tickets []*chainhash.Hash) {
 		},
@@ -200,7 +213,7 @@ func main() {
 			default:
 			}
 		},
-		// spend from registered address
+		// spend from registered address (i.e. redeem)
 		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
 			wAddrTx := &watchedAddrTx{transaction, details}
 			select {
@@ -215,17 +228,7 @@ func main() {
 		// NotifyNewTransactions with the verbose flag set to false has been
 		// made to register for the notification and the function is non-nil.
 		OnTxAccepted: func(hash *chainhash.Hash, amount dcrutil.Amount) {
-			// b, err := hex.DecodeString(hash.String())
-			// if err != nil {
-			// 	log.Errorf("Unable to decode Tx hash string: %v, %v",hash.String(),
-			// 		err.Error())
-			// }
-			// tx, err := dcrutil.NewTxFromBytes(hash.Bytes())
-			// if err != nil {
-			// 	log.Errorf("Unable to create Tx from bytes: %v, %v",hash.String(),
-			// 		err.Error())
-			// 	return
-			// }
+			// Just send the tx hash and let the goroutine handle everything.
 			select {
 			case newTxChan <- hash:
 			default:
@@ -248,7 +251,7 @@ func main() {
 		if err != nil {
 			fmt.Printf("Failed to read dcrd cert file at %s: %s\n", cfg.DcrdCert,
 				err.Error())
-			os.Exit(1)
+			return 3
 		}
 	}
 
@@ -258,7 +261,7 @@ func main() {
 
 	connCfgDaemon := &dcrrpcclient.ConnConfig{
 		Host:         cfg.DcrdServ,
-		Endpoint:     "ws",
+		Endpoint:     "ws", // websocket
 		User:         cfg.DcrdUser,
 		Pass:         cfg.DcrdPass,
 		Certificates: dcrdCerts,
@@ -268,18 +271,18 @@ func main() {
 	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, &ntfnHandlersDaemon)
 	if err != nil {
 		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
-		os.Exit(1)
+		return 4
 	}
 
 	// Display connected network
 	net, err := dcrdClient.GetCurrentNet()
 	if err != nil {
 		fmt.Printf("Unable to get current network from dcrd: %s\n", err.Error())
-		os.Exit(1)
+		return 5
 	}
 	log.Infof("Connected to dcrd on network: %v", net.String())
 
-	// Validate watchaddresses
+	// Validate each watchaddress
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
 	addrMap := make(map[string]struct{})
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
@@ -288,7 +291,10 @@ func main() {
 			// or DecodeNetworkAddress for auto-detection of network
 			if err != nil {
 				log.Errorf("Invalid watchaddress %v", a)
-				os.Exit(1)
+				return 6
+			}
+			if _, seen := addrMap[a]; seen {
+				continue
 			}
 			log.Infof("Valid watchaddress: %v", addr)
 			addresses = append(addresses, addr)
@@ -310,21 +316,21 @@ func main() {
 	if err := dcrdClient.NotifyBlocks(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"block notifications: %s\n", err.Error())
-		os.Exit(1)
+		return 7
 	}
 
 	// Register for stake difficulty change notifications.
 	if err := dcrdClient.NotifyStakeDifficulty(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"stake difficulty change notifications: %s\n", err.Error())
-		os.Exit(1)
+		return 7
 	}
 
 	// Register for tx accepted into mempool ntfns
 	if err := dcrdClient.NotifyNewTransactions(false); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"new transaction (mempool) notifications: %s\n", err.Error())
-		os.Exit(1)
+		return 7
 	}
 
 	// For OnNewTickets
@@ -339,7 +345,7 @@ func main() {
 	if len(addresses) > 0 {
 		if err := dcrdClient.NotifyReceived(addresses); err != nil {
 			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
-			os.Exit(1)
+			return 7
 		}
 	}
 
@@ -376,7 +382,7 @@ func main() {
 			fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
 				" wanted to start with --nostakeinfo?\n", err.Error())
 			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v", cfg.DcrwCert)
-			os.Exit(1)
+			return 8
 		}
 	}
 
@@ -389,17 +395,13 @@ func main() {
 
 	// Start waiting for the interrupt signal
 	go func() {
-		for range c {
-			signal.Stop(c)
-			// Close the channel so multiple goroutines can get the message
-			log.Infof("CTRL+C hit.  Closing goroutines.")
-			close(quit)
-			return
-		}
+		<-c
+		signal.Stop(c)
+		// Close the channel so multiple goroutines can get the message
+		log.Infof("CTRL+C hit.  Closing goroutines.")
+		close(quit)
+		return
 	}()
-
-	// WaitGroup for the chainMonitor and stakeMonitor
-	var wg sync.WaitGroup
 
 	// Saver mutex, to share the same underlying output resource between block
 	// and stake info data savers
@@ -451,7 +453,7 @@ func main() {
 	collector, err := newBlockDataCollector(cfg, dcrdClient)
 	if err != nil {
 		fmt.Printf("Failed to create block data collector: %s\n", err.Error())
-		os.Exit(1)
+		return 9
 	}
 
 	backendLog.Flush()
@@ -460,13 +462,16 @@ func main() {
 	blockData, err := collector.collect(!cfg.PoolValue)
 	if err != nil {
 		fmt.Printf("Block data collection for initial summary failed. Error: %v", err.Error())
-		os.Exit(1)
+		return 10
 	}
 
 	if err := summarySaverBlockData.Store(blockData); err != nil {
 		fmt.Printf("Failed to print initial block data summary. Error: %v", err.Error())
-		os.Exit(1)
+		return 11
 	}
+
+	// WaitGroup for the monitor goroutines
+	var wg sync.WaitGroup
 
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
 		// Blockchain monitor for the collector
@@ -483,24 +488,24 @@ func main() {
 		stakeCollector, err = newStakeInfoDataCollector(cfg, dcrdClient, dcrwClient)
 		if err != nil {
 			fmt.Printf("Failed to create block data collector: %s\n", err.Error())
-			os.Exit(1)
+			return 12
 		}
 
 		// Initial data summary prior to start of regular collection
 		height, err := stakeCollector.getHeight()
 		if err != nil {
 			fmt.Printf("Unable to get current block height. Error: %v", err.Error())
-			os.Exit(1)
+			return 12
 		}
 		stakeInfoData, err := stakeCollector.collect(height)
 		if err != nil {
 			fmt.Printf("Stake info data collection failed gathering initial data. Error: %v", err.Error())
-			os.Exit(1)
+			return 12
 		}
 
 		if err := summarySaverStakeInfo.Store(stakeInfoData); err != nil {
 			fmt.Printf("Failed to print initial stake info data summary. Error: %v", err.Error())
-			os.Exit(1)
+			return 12
 		}
 
 		if !cfg.NoMonitor {
@@ -517,18 +522,18 @@ func main() {
 		mpoolCollector, err := newMempoolDataCollector(cfg, dcrdClient)
 		if err != nil {
 			fmt.Printf("Failed to create mempool data collector: %s\n", err.Error())
-			os.Exit(1)
+			return 13
 		}
 
 		mempoolInfo, err := mpoolCollector.collect()
 		if err != nil {
 			fmt.Printf("Mempool info collection failed while gathering initial data. Error: %v", err.Error())
-			os.Exit(1)
+			return 14
 		}
 
 		if err := summarySaverMempool.Store(mempoolInfo); err != nil {
 			fmt.Printf("Failed to print initial mempool info summary. Error: %v", err.Error())
-			os.Exit(1)
+			return 15
 		}
 
 		newTicketLimit := int32(cfg.MPTriggerTickets)
@@ -548,6 +553,7 @@ func main() {
 		}()
 	}
 
+	// No addresses is implied if NoMonitor is true.
 	if len(addresses) > 0 {
 		wg.Add(2)
 		go handleReceivingTx(dcrdClient, addrMap, recvTxChan, &wg, quit)
@@ -575,10 +581,10 @@ func main() {
 	log.Infof("RPC client(s) successfully connected. Now monitoring and " +
 		"collecting data.")
 
-	// When os.Interrupt arrives, the channel quit will be closed
-	//<-quit
+	// Wait for CTRL+C to signal goroutines to terminate via quit channel.
 	wg.Wait()
 
+	// But if monitoring is disabled, simulate an OS interrupt.
 	if cfg.NoMonitor {
 		c <- os.Interrupt
 		time.Sleep(200)
@@ -616,7 +622,7 @@ func main() {
 
 	log.Infof("Bye!")
 	time.Sleep(500 * time.Millisecond)
-	os.Exit(1)
+	return 16
 }
 
 // execLogger conitnually scans for new lines on outpipe, reads the text for
@@ -661,4 +667,8 @@ func debugTiming(start time.Time, fun string) {
 func decodeNetAddr(addr string) dcrutil.Address {
 	address, _ := dcrutil.DecodeNetworkAddress(addr)
 	return address
+}
+
+func main() {
+	os.Exit(mainCore())
 }
