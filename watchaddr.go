@@ -4,6 +4,9 @@ package main
 
 import (
 	"fmt"
+	"net/smtp"
+	//"strings"
+	"strconv"
 	"sync"
 
 	_ "github.com/decred/dcrd/chaincfg/chainhash"
@@ -13,7 +16,35 @@ import (
 	"github.com/decred/dcrutil"
 )
 
-func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
+type emailConfig struct {
+	emailAddr string
+	smtpUser, smtpPass, smtpServer string
+	smtpPort int
+}
+
+func sendEmailWatchRecv(message string, ecfg *emailConfig) {
+    auth := smtp.PlainAuth(
+        "",
+        ecfg.smtpUser,
+        ecfg.smtpPass,
+        ecfg.smtpServer,
+    )
+	
+    err := smtp.SendMail(
+        ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort),
+        auth,
+        ecfg.emailAddr, // sender
+        []string{ecfg.emailAddr},
+        []byte(message),
+    )
+
+    if err != nil {
+        log.Errorf("Failed to send email: %v", err)
+    }
+}
+
+func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
+	emailConf *emailConfig,
 	recvTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
@@ -48,10 +79,14 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
 
 				for _, txAddr := range txAddrs {
 					addrstr := txAddr.EncodeAddress()
-					if _, ok := addrs[addrstr]; ok {
-						log.Infof("Transaction with watched address %v as outpoint (receiving), value %.6f, %v",
+					if doEmail, ok := addrs[addrstr]; ok {
+						recvString := fmt.Sprintf("Transaction with watched address %v as outpoint (receiving), value %.6f, %v",
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action)
+						log.Infof(recvString)
+						if doEmail {
+							sendEmailWatchRecv(recvString, emailConf)
+						}
 						continue
 					}
 				}
@@ -69,7 +104,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
 // time, watch for a transaction with an input (source) whos previous outpoint
 // is one of the watched addresses.
 // But I am not sure we can do that here with the Tx and BlockDetails provided.
-func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
+func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 	spendTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
