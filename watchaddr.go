@@ -107,10 +107,16 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]struct{},
 				Tx, err := c.GetRawTransaction(&prevOut.Hash)
 				if err != nil {
 					log.Error("Unable to get raw transaction for", Tx)
+					continue
 				}
 
 				// prevOut.Index should tell us which one, right?  Check all anyway.
-				for _, txOut := range Tx.MsgTx().TxOut {
+				wireMsg := Tx.MsgTx()
+				if wireMsg == nil {
+					log.Debug("No wire Msg? Hmm.")
+					continue
+				}
+				for _, txOut := range wireMsg.TxOut {
 					_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(
 						txOut.Version, txOut.PkScript, activeChain)
 					if err != nil {
