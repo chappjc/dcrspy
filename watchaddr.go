@@ -43,7 +43,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 
 	messageFull := ""
 	for k, v := range header {
-		message += fmt.Sprintf("%s: %s\r\n", k, v)
+		messageFull += fmt.Sprintf("%s: %s\r\n", k, v)
 	}
 
 	messageFull += "\r\n" + message
@@ -53,7 +53,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 		auth,
 		ecfg.smtpUser, // sender is receiver
 		[]string{ecfg.emailAddr},
-		[]byte(message),
+		[]byte(messageFull),
 	)
 
 	if err != nil {
