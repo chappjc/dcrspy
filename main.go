@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
@@ -275,18 +276,32 @@ func mainCore() int {
 	}
 
 	// Display connected network
-	net, err := dcrdClient.GetCurrentNet()
+	curnet, err := dcrdClient.GetCurrentNet()
 	if err != nil {
 		fmt.Printf("Unable to get current network from dcrd: %s\n", err.Error())
 		return 5
 	}
-	log.Infof("Connected to dcrd on network: %v", net.String())
+	log.Infof("Connected to dcrd on network: %v", curnet.String())
 
 	// Validate each watchaddress
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
-	addrMap := make(map[string]struct{})
+	addrMap := make(map[string]bool)
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
-		for _, a := range cfg.WatchAddresses {
+		for _, ai := range cfg.WatchAddresses {
+			s := strings.Split(ai, ",")
+
+			var doEmail bool
+			if len(s) > 1 && len(s[1]) > 0 {
+				doEmailI, err := strconv.Atoi(s[1])
+				if err != nil {
+					log.Error(err)
+					continue
+				}
+				doEmail = doEmailI != 0
+			}
+
+			a := s[0]
+
 			addr, err := dcrutil.DecodeAddress(a, activeNet.Params)
 			// or DecodeNetworkAddress for auto-detection of network
 			if err != nil {
@@ -298,7 +313,7 @@ func mainCore() int {
 			}
 			log.Infof("Valid watchaddress: %v", addr)
 			addresses = append(addresses, addr)
-			addrMap[a] = struct{}{}
+			addrMap[a] = doEmail
 		}
 		if len(addresses) == 0 {
 			if recvTxChan != nil {
@@ -310,6 +325,12 @@ func mainCore() int {
 				spendTxChan = nil
 			}
 		}
+	}
+
+	emailConfig, err := getEmailConfig(cfg)
+	if err != nil {
+		log.Error(err)
+		return 16
 	}
 
 	// Register for block connection notifications.
@@ -556,7 +577,7 @@ func mainCore() int {
 	// No addresses is implied if NoMonitor is true.
 	if len(addresses) > 0 {
 		wg.Add(2)
-		go handleReceivingTx(dcrdClient, addrMap, recvTxChan, &wg, quit)
+		go handleReceivingTx(dcrdClient, addrMap, emailConfig, recvTxChan, &wg, quit)
 		go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 
@@ -667,6 +688,28 @@ func debugTiming(start time.Time, fun string) {
 func decodeNetAddr(addr string) dcrutil.Address {
 	address, _ := dcrutil.DecodeNetworkAddress(addr)
 	return address
+}
+
+func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
+	smtpHost, smtpPort, err := net.SplitHostPort(cfg.SMTPServer)
+	if err != nil {
+		return
+	}
+
+	smtpPortNum, err := strconv.Atoi(smtpPort)
+	if err != nil {
+		return
+	}
+
+	emailConf = &emailConfig{
+		emailAddr:  cfg.EmailAddr,
+		smtpUser:   cfg.SMTPUser,
+		smtpPass:   cfg.SMTPPass,
+		smtpServer: smtpHost,
+		smtpPort:   smtpPortNum,
+	}
+
+	return
 }
 
 func main() {
