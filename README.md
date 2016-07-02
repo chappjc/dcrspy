@@ -28,6 +28,48 @@ Transactions involving **watched addresses** may also be logged (using the
 `watchaddress` flag).  Watching for addresses receiving funds seems to be OK,
 but watching for sending funds from a watched address is experimental.
 
+## Output
+
+Multiple destinations for the data are planned:
+
+1. **stdout**.  JSON-formatted data is send to stdout. **DONE**.
+2. **File system**.  JSON-formatted data is written to the file system. **DONE**.
+3. **Database**. Data is inserted into a MySQL database. NOT IMPLEMENTED.
+4. **Plain text summary**: balances, votes, current ticket price, mean fees, 
+   wallet status. **DONE**.
+5. **RESTful API** over HTTPS. NOT IMPLEMENTED.
+
+Details of the JSON output may be found in [Data Details](#data-details).  The
+plain text summary looks something like the following (_wallet data redacted_):
+
+~~~none
+Block 35561:
+        Stake difficulty:                    22.663 -> 22.663 (current -> next block)
+        Estimated price in next window:      25.279 / [24.63, 26.68] ([min, max])
+        Window progress:   138 / 144  of price window number 246
+        Ticket fees:  0.0101, 0.0101, 0.0000 (mean, median, std), n=1
+        Ticket pool:  42048 (size), 17.721 (avg. price), 745115.63 (total DCR locked)
+
+Wallet and Stake Info at Height 35561:
+- Balances
+        Balances (spendable):     0.0000 (default),    0.0000 (all)
+        Balances (locked):      xxx.xxxx (default), xxxx.xxxx (all), xxxx.xxxx (imported)
+        Balances (any):        xxxx.xxxx (default), xxxx.xxxx (all)
+- Stake Info
+        ===>  Mining enabled: true;  Unlocked: true  <===
+        Mined tickets:        4 (immature),     43 (live)
+        mempool tickets:      0 (own),            6 (all)
+        Ticket price:      22.663  |    Window progress: 138 / 144
+        Wallet's price:     23.8100;  fee:   0.1940 / KiB
+        Totals:        541  votes,     919.84 subsidy
+                         1 missed,          1 revoked
+~~~
+
+Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
+not requested from dcrd, and thus not shown in the summary.  It is still
+present in JSON, but the values are {0, -1, -1}.  To get actualy ticket pool
+value, use `-p, --poolvalue`.
+
 ## Arbitrary Command Execution
 
 When dcrspy receives a new block notification from dcrd, data collection and
@@ -89,48 +131,6 @@ User-specified system command execution uses the logging subsystem tagged with
 EXEC in the logs. Both stdout and stderr for the executed command are sent to
 the dcrspy log.  The end of command execution is also logged, as shown in the
 example above.
-
-## Output
-
-Multiple destinations for the data are planned:
-
-1. **stdout**.  JSON-formatted data is send to stdout. **DONE**.
-2. **File system**.  JSON-formatted data is written to the file system. **DONE**.
-3. **Database**. Data is inserted into a MySQL database. NOT IMPLEMENTED.
-4. **Plain text summary**: balances, votes, current ticket price, mean fees, 
-   wallet status. **DONE**.
-5. **RESTful API** over HTTPS. NOT IMPLEMENTED.
-
-Details of the JSON output may be found in [Data Details](#data-details).  The
-plain text summary looks something like the following (_wallet data redacted_):
-
-~~~none
-Block 35561:
-        Stake difficulty:                    22.663 -> 22.663 (current -> next block)
-        Estimated price in next window:      25.279 / [24.63, 26.68] ([min, max])
-        Window progress:   138 / 144  of price window number 246
-        Ticket fees:  0.0101, 0.0101, 0.0000 (mean, median, std), n=1
-        Ticket pool:  42048 (size), 17.721 (avg. price), 745115.63 (total DCR locked)
-
-Wallet and Stake Info at Height 35561:
-- Balances
-        Balances (spendable):     0.0000 (default),    0.0000 (all)
-        Balances (locked):      xxx.xxxx (default), xxxx.xxxx (all), xxxx.xxxx (imported)
-        Balances (any):        xxxx.xxxx (default), xxxx.xxxx (all)
-- Stake Info
-        ===>  Mining enabled: true;  Unlocked: true  <===
-        Mined tickets:        4 (immature),     43 (live)
-        mempool tickets:      0 (own),            6 (all)
-        Ticket price:      22.663  |    Window progress: 138 / 144
-        Wallet's price:     23.8100;  fee:   0.1940 / KiB
-        Totals:        541  votes,     919.84 subsidy
-                         1 missed,          1 revoked
-~~~
-
-Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
-not requested from dcrd, and thus not shown in the summary.  It is still
-present in JSON, but the values are {0, -1, -1}.  To get actualy ticket pool
-value, use `-p, --poolvalue`.
 
 ## TO-DO
 
