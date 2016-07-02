@@ -84,10 +84,10 @@ type config struct {
 
 	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
 
-	SMTPUser	string `long:"smtpuser" description:"SMTP user name"`
-	SMTPPass	string `long:"smtppass" description:"SMTP password"`
-	SMTPServer	string `long:"smtpserver" description:"SMTP host name"`
-	EmailAddr	string `long:"emailaddr" description:"Destination email address for alerts"`
+	SMTPUser   string `long:"smtpuser" description:"SMTP user name"`
+	SMTPPass   string `long:"smtppass" description:"SMTP password"`
+	SMTPServer string `long:"smtpserver" description:"SMTP host name"`
+	EmailAddr  string `long:"emailaddr" description:"Destination email address for alerts"`
 
 	SummaryOut     bool   `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
 	SaveJSONStdout bool   `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`

@@ -289,9 +289,9 @@ func mainCore() int {
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		for _, ai := range cfg.WatchAddresses {
 			s := strings.Split(ai, ",")
-	
+
 			var doEmail bool
-			if len(s) > 1 && len(s[1])>0 {
+			if len(s) > 1 && len(s[1]) > 0 {
 				doEmailI, err := strconv.Atoi(s[1])
 				if err != nil {
 					log.Error(err)
@@ -704,9 +704,9 @@ func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
 	emailConf = &emailConfig{
 		emailAddr:  cfg.EmailAddr,
 		smtpUser:   cfg.SMTPUser,
-		smtpPass:  	cfg.SMTPPass,
+		smtpPass:   cfg.SMTPPass,
 		smtpServer: smtpHost,
-		smtpPort: 	smtpPortNum,
+		smtpPort:   smtpPortNum,
 	}
 
 	return

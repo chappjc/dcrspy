@@ -17,30 +17,52 @@ import (
 )
 
 type emailConfig struct {
-	emailAddr string
+	emailAddr                      string
 	smtpUser, smtpPass, smtpServer string
-	smtpPort int
+	smtpPort                       int
 }
 
-func sendEmailWatchRecv(message string, ecfg *emailConfig) {
-    auth := smtp.PlainAuth(
-        "",
-        ecfg.smtpUser,
-        ecfg.smtpPass,
-        ecfg.smtpServer,
-    )
-	
-    err := smtp.SendMail(
-        ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort),
-        auth,
-        ecfg.emailAddr, // sender
-        []string{ecfg.emailAddr},
-        []byte(message),
-    )
+func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
+	auth := smtp.PlainAuth(
+		"",
+		ecfg.smtpUser,
+		ecfg.smtpPass,
+		ecfg.smtpServer,
+	)
 
-    if err != nil {
-        log.Errorf("Failed to send email: %v", err)
-    }
+	addr := ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort)
+	log.Debug(addr)
+
+	header := make(map[string]string)
+	header["From"] = ecfg.smtpUser
+	header["To"] = ecfg.emailAddr
+	header["Subject"] = "dcrspy notification"
+	//header["MIME-Version"] = "1.0"
+	//header["Content-Type"] = "text/plain; charset=\"utf-8\""
+	//header["Content-Transfer-Encoding"] = "base64"
+
+	messageFull := ""
+	for k, v := range header {
+		message += fmt.Sprintf("%s: %s\r\n", k, v)
+	}
+
+	messageFull += "\r\n" + message
+
+	err := smtp.SendMail(
+		addr,
+		auth,
+		ecfg.smtpUser, // sender is receiver
+		[]string{ecfg.emailAddr},
+		[]byte(message),
+	)
+
+	if err != nil {
+		log.Errorf("Failed to send email: %v", err)
+		return err
+	}
+
+	log.Tracef("Send email to address %v\n", ecfg.emailAddr)
+	return nil
 }
 
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
@@ -85,7 +107,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 							action)
 						log.Infof(recvString)
 						if doEmail {
-							sendEmailWatchRecv(recvString, emailConf)
+							go sendEmailWatchRecv(recvString, emailConf)
 						}
 						continue
 					}
