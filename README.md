@@ -38,6 +38,7 @@ Multiple destinations for the data are planned:
 4. **Plain text summary**: balances, votes, current ticket price, mean fees, 
    wallet status. **DONE**.
 5. **RESTful API** over HTTPS. NOT IMPLEMENTED.
+6. **email**: email notification upon receiving to a watched address.
 
 Details of the JSON output may be found in [Data Details](#data-details).  The
 plain text summary looks something like the following (_wallet data redacted_):
@@ -69,6 +70,47 @@ Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
 not requested from dcrd, and thus not shown in the summary.  It is still
 present in JSON, but the values are {0, -1, -1}.  To get actualy ticket pool
 value, use `-p, --poolvalue`.
+
+## Watched Addresses and Email Notifications
+
+dcrspy may watch for transactions receiving into or sending from "watched"
+addresses.  Watched addresses are specified with the `watchaddress` flag, with
+multiple addresses specified using repeated `watchaddress` flags (e.g. one per
+line in the config file).  For example:
+
+~~~none
+; Addresses to watch for incoming transactions
+; Decred developer (C0) address
+;watchaddress=Dcur2mcGjmENx4DhNqDctW5wJCVyT3Qeqkx
+; Some larger mining pool addresses:
+;watchaddress=DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ
+;watchaddress=DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4
+~~~
+
+To receive an email notification for each transaction receiving to a watched
+address, concatenate "`,1`" at the end of the address.  For example:
+
+~~~none
+; Receive email notifications for this one
+;watchaddress=DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW,1
+; But not this one
+;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus,0
+; and not by default
+;watchaddress=DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE
+~~~
+
+An SMTP server name, port, authentication information, and a recipient email
+address must also be specified to use email notifications.
+
+~~~none
+emailaddr=chappjc@receiving.com
+smtpuser=smtpuser@mailprovider.net
+smtppass=suPErSCRTpasswurd
+smtpserver=smtp.mailprovider.org:587
+~~~
+
+If you have trouble getting it to work, try any alternate ports available on
+your SMTP server (e.g. 587 instead of 465).  You must specify the port.
 
 ## Arbitrary Command Execution
 
