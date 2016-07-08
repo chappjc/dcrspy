@@ -106,7 +106,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action)
 						log.Infof(recvString)
-						if doEmail {
+						if doEmail && emailConf != nil {
 							go sendEmailWatchRecv(recvString, emailConf)
 						}
 						continue

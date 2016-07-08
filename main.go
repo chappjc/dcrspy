@@ -286,6 +286,7 @@ func mainCore() int {
 	// Validate each watchaddress
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
 	addrMap := make(map[string]bool)
+	var needEmail bool
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		for _, ai := range cfg.WatchAddresses {
 			s := strings.Split(ai, ",")
@@ -298,6 +299,7 @@ func mainCore() int {
 					continue
 				}
 				doEmail = doEmailI != 0
+				needEmail = needEmail || doEmail
 			}
 
 			a := s[0]
@@ -328,7 +330,7 @@ func mainCore() int {
 	}
 
 	emailConfig, err := getEmailConfig(cfg)
-	if err != nil {
+	if needEmail && err != nil {
 		log.Error(err)
 		return 16
 	}
