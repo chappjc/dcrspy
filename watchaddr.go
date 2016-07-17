@@ -3,6 +3,7 @@
 package main
 
 import (
+	"errors"
 	"fmt"
 	"net/smtp"
 	//"strings"
@@ -22,7 +23,14 @@ type emailConfig struct {
 	smtpPort                       int
 }
 
+// sendEmailWatchRecv Sends an email using the input emailConfig and message
+// string.
 func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
+	// Check for nil pointer emailConfig
+	if ecfg == nil {
+		return errors.New("emailConfig must not be a nil pointer")
+	}
+
 	auth := smtp.PlainAuth(
 		"",
 		ecfg.smtpUser,
@@ -30,17 +38,21 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 		ecfg.smtpServer,
 	)
 
+    // The SMTP server address includes the port
 	addr := ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort)
-	log.Debug(addr)
+	//log.Debug(addr)
 
+	// Make a header using a map for clarity
 	header := make(map[string]string)
 	header["From"] = ecfg.smtpUser
 	header["To"] = ecfg.emailAddr
+	// TODO: make subject line adjustable or include an amount
 	header["Subject"] = "dcrspy notification"
 	//header["MIME-Version"] = "1.0"
 	//header["Content-Type"] = "text/plain; charset=\"utf-8\""
 	//header["Content-Transfer-Encoding"] = "base64"
 
+	// Build the full message with the header + input message string
 	messageFull := ""
 	for k, v := range header {
 		messageFull += fmt.Sprintf("%s: %s\r\n", k, v)
@@ -48,11 +60,12 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 
 	messageFull += "\r\n" + message
 
+	// Send email
 	err := smtp.SendMail(
 		addr,
 		auth,
 		ecfg.smtpUser, // sender is receiver
-		[]string{ecfg.emailAddr},
+		[]string{ecfg.emailAddr}, // recipients
 		[]byte(messageFull),
 	)
 
@@ -65,6 +78,11 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 	return nil
 }
 
+// handleReceivingTx should be run as a go routine, and handles notification
+// of transactions receiving to a registered address.  If no email notification
+// is requried, emailConf may be a nil pointer.  addrs is a map of addresses as
+// strings with bool values indicating if email should be sent in response to
+// transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 	emailConf *emailConfig,
 	recvTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
@@ -91,6 +109,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 				action = "inserted into mempool."
 			}
 
+			// Check the addresses associated with the PkScript of each TxOut
 			for _, txOut := range tx.MsgTx().TxOut {
 				_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
 					txOut.PkScript, activeChain)
@@ -99,6 +118,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 					continue
 				}
 
+				// Check if we are watching any address for this TxOut
 				for _, txAddr := range txAddrs {
 					addrstr := txAddr.EncodeAddress()
 					if doEmail, ok := addrs[addrstr]; ok {
@@ -106,6 +126,8 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action)
 						log.Infof(recvString)
+						// Email notification if watchaddress has the ",1"
+						// suffix AND we have a non-nil *emailConfig
 						if doEmail && emailConf != nil {
 							go sendEmailWatchRecv(recvString, emailConf)
 						}
