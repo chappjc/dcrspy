@@ -285,21 +285,21 @@ func mainCore() int {
 
 	// Validate each watchaddress
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
-	addrMap := make(map[string]bool)
+	addrMap := make(map[string]TxAction)
 	var needEmail bool
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		for _, ai := range cfg.WatchAddresses {
 			s := strings.Split(ai, ",")
 
-			var doEmail bool
+			var emailActn TxAction
 			if len(s) > 1 && len(s[1]) > 0 {
-				doEmailI, err := strconv.Atoi(s[1])
+				emailI, err := strconv.Atoi(s[1])
 				if err != nil {
 					log.Error(err)
 					continue
 				}
-				doEmail = doEmailI != 0
-				needEmail = needEmail || doEmail
+				emailActn = TxAction(emailI)
+				needEmail = needEmail || (emailActn != 0)
 			}
 
 			a := s[0]
@@ -315,7 +315,7 @@ func mainCore() int {
 			}
 			log.Infof("Valid watchaddress: %v", addr)
 			addresses = append(addresses, addr)
-			addrMap[a] = doEmail
+			addrMap[a] = emailActn
 		}
 		if len(addresses) == 0 {
 			if recvTxChan != nil {

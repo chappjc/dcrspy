@@ -23,6 +23,16 @@ type emailConfig struct {
 	smtpPort                       int
 }
 
+// TxAction is what is happening to the transaction (mined or inserted into
+// mempool).
+type TxAction int32
+// Valid values for TxAction
+const (
+	TxMined TxAction = 1 << iota
+	TxInserted
+	// removed? invalidated?
+)
+
 // sendEmailWatchRecv Sends an email using the input emailConfig and message
 // string.
 func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
@@ -38,7 +48,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 		ecfg.smtpServer,
 	)
 
-    // The SMTP server address includes the port
+	// The SMTP server address includes the port
 	addr := ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort)
 	//log.Debug(addr)
 
@@ -64,7 +74,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 	err := smtp.SendMail(
 		addr,
 		auth,
-		ecfg.smtpUser, // sender is receiver
+		ecfg.smtpUser,            // sender is receiver
 		[]string{ecfg.emailAddr}, // recipients
 		[]byte(messageFull),
 	)
@@ -83,7 +93,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 // is requried, emailConf may be a nil pointer.  addrs is a map of addresses as
 // strings with bool values indicating if email should be sent in response to
 // transactions involving the keyed address.
-func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
+func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	emailConf *emailConfig,
 	recvTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
@@ -103,10 +113,13 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 
 			tx := addrTx.transaction
 			var action string
+			var txAction TxAction
 			if addrTx.details != nil {
 				action = fmt.Sprintf("mined into block %d.", addrTx.details.Height)
+				txAction = TxMined
 			} else {
 				action = "inserted into mempool."
+				txAction = TxInserted
 			}
 
 			// Check the addresses associated with the PkScript of each TxOut
@@ -121,14 +134,14 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 				// Check if we are watching any address for this TxOut
 				for _, txAddr := range txAddrs {
 					addrstr := txAddr.EncodeAddress()
-					if doEmail, ok := addrs[addrstr]; ok {
+					if addrActn, ok := addrs[addrstr]; ok {
 						recvString := fmt.Sprintf("Transaction with watched address %v as outpoint (receiving), value %.6f, %v",
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action)
 						log.Infof(recvString)
 						// Email notification if watchaddress has the ",1"
 						// suffix AND we have a non-nil *emailConfig
-						if doEmail && emailConf != nil {
+						if ((addrActn & txAction) > 0 && emailConf != nil) {
 							go sendEmailWatchRecv(recvString, emailConf)
 						}
 						continue
@@ -148,7 +161,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]bool,
 // time, watch for a transaction with an input (source) whos previous outpoint
 // is one of the watched addresses.
 // But I am not sure we can do that here with the Tx and BlockDetails provided.
-func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]bool,
+func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	spendTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
