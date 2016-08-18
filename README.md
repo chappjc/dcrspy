@@ -191,16 +191,26 @@ There is a [very long to-do list](https://drive.google.com/open?id=1Z057i7tGfnAT
 
 ### Build from Source
 
-* Install Go:
-  http://golang.org/doc/install
+* [Install Go](http://golang.org/doc/install)
 
 * Verify Go installation:
 
- `go env GOROOT GOPATH`
+      go env GOROOT GOPATH
 
-* Build executable
+* Ensure $GOPATH/bin is on your $PATH
+* Install glide
 
- `go get -u -v github.com/chappjc/dcrspy`
+      go get -u -v github.com/Masterminds/glide
+
+* Clone dcrspy repo
+
+      git clone https://github.com/chappjc/dcrspy.git $GOPATH/src/github.com/chappjc/dcrspy
+
+* Glide install, and build executable
+
+      cd $GOPATH/src/github.com/chappjc/dcrspy
+      glide install
+      go install $(glide nv)
 
 * Find dcrspy executable in `$GOPATH/bin`, and copy elsewhere (recommended).
 
@@ -210,9 +220,12 @@ folders.
 
 ## Updating
 
-Run the same command used to build:
+First, update the repository:
 
-`go get -u -v github.com/chappjc/dcrspy`
+    cd $GOPATH/src/github.com/chappjc/dcrspy
+    git pull
+
+Then follow the install instructions starting at "Glide install...".
 
 ## Getting Started
 
