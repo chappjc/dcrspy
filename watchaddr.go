@@ -38,7 +38,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 		ecfg.smtpServer,
 	)
 
-    // The SMTP server address includes the port
+	// The SMTP server address includes the port
 	addr := ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort)
 	//log.Debug(addr)
 
@@ -64,7 +64,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 	err := smtp.SendMail(
 		addr,
 		auth,
-		ecfg.smtpUser, // sender is receiver
+		ecfg.smtpUser,            // sender is receiver
 		[]string{ecfg.emailAddr}, // recipients
 		[]byte(messageFull),
 	)

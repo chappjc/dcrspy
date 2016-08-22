@@ -53,6 +53,15 @@ const (
 	recvTxChanBuffer = 128
 	// sendTxChanBuffer is the size of the send transaction channel buffer
 	sendTxChanBuffer = 128
+
+	spyart = `
+                       __                          
+                  ____/ /__________________  __  __
+                 / __  / ___/ ___/ ___/ __ \/ / / /
+                / /_/ / /__/ /  (__  ) /_/ / /_/ / 
+                \__,_/\___/_/  /____/ .___/\__, /  
+                                   /_/    /____/  
+`
 )
 
 // mainCore does all the work. Deferred functions do not run after os.Exit().
@@ -67,7 +76,7 @@ func mainCore() int {
 
 	dcrrpcclient.UseLogger(clientLog)
 
-	log.Infof(appName+" version %s", ver.String())
+	log.Infof(appName+" version %s%v", ver.String(), spyart)
 
 	// Create data output folder if it does not already exist
 	err = os.MkdirAll(cfg.OutFolder, 0755)

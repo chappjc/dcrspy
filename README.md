@@ -33,12 +33,12 @@ but watching for sending funds from a watched address is experimental.
 Multiple destinations for the data are planned:
 
 1. **stdout**.  JSON-formatted data is send to stdout. **DONE**.
-2. **File system**.  JSON-formatted data is written to the file system. **DONE**.
-3. **Database**. Data is inserted into a MySQL database. NOT IMPLEMENTED.
-4. **Plain text summary**: balances, votes, current ticket price, mean fees, 
+1. **File system**.  JSON-formatted data is written to the file system. **DONE**.
+1. **Database**. Data is inserted into a MySQL database. NOT IMPLEMENTED.
+1. **Plain text summary**: balances, votes, current ticket price, mean fees,
    wallet status. **DONE**.
-5. **RESTful API** over HTTPS. NOT IMPLEMENTED.
-6. **email**: email notification upon receiving to a watched address.
+1. **RESTful API** over HTTPS. IN PROGRESS.
+1. **email**: email notification upon receiving to a watched address. **DONE**.
 
 Details of the JSON output may be found in [Data Details](#data-details).  The
 plain text summary looks something like the following (_wallet data redacted_):
@@ -243,7 +243,7 @@ Quick tips:
 
 * Get a quick summary and exit, with `-e, --nomonitor`.
 * Stay connected and monitor for new blocks, writting:
-  * Plain text summary to stdout, with `-s, --summary`. 
+  * Plain text summary to stdout, with `-s, --summary`.
   * JSON to stdout, with `-o, --save-jsonstdout`.
   * JSON to file system, with `-j, --save-jsonfile`.
 * To monitor only block data (no wallet connection), use `--nostakeinfo`.
@@ -398,7 +398,7 @@ object.
 ~~~
 
 1. Ticket fee info (block).  This is the usual output of `ticketfeeinfo` with
-no extra arguments:
+ no extra arguments:
 
  ~~~json
 "ticketfeeinfo_block": {
@@ -413,7 +413,7 @@ no extra arguments:
 ~~~
 
 1. Current and estimated stake difficulty.  These are the usual outputs of
-`estimatestakediff` and `getstakedifficulty`:
+ `estimatestakediff` and `getstakedifficulty`:
 
  ~~~json
 "estimatestakediff": {
