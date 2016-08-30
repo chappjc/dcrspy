@@ -61,10 +61,10 @@ func newMempoolMonitor(collector *mempoolDataCollector,
 
 // txHandler receives signals from OnTxAccepted via the newTxChan, indicating
 // that a new transaction has entered mempool.
-// Thus function should be launched as a goroutine, and stopped by closing the
+// This function should be launched as a goroutine, and stopped by closing the
 // quit channel, the broadcasting mechanism used by main.
 // The newTxChan contains a chain hash for the transaction from the
-// notificiation, or an zero value hash indicating it was from a Ticker.
+// notificiation, or a zero value hash indicating it was from a Ticker.
 func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 	defer p.wg.Done()
 	for {

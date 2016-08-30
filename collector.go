@@ -39,6 +39,7 @@ type stakeInfoData struct {
 	walletInfo       *dcrjson.WalletInfoResult
 	stakeinfo        *dcrjson.GetStakeInfoResult
 	balances         *WalletBalances
+	accountBalances  *map[string]map[string]dcrutil.Amount
 	priceWindowNum   int // trivia
 	idxBlockInWindow int // Relative block index within the difficulty period
 }
@@ -106,15 +107,33 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 		return nil, err
 	}
 
+	accounts, err := wallet.ListAccounts()
+	if err != nil {
+		return nil, err
+	}
+
+	balTypes := []string{"all", "spendable", "locked"}
+	accountBalances := make(map[string]map[string]dcrutil.Amount)
+	for acct := range accounts {
+		accountBalances[acct] = make(map[string]dcrutil.Amount)
+		for _, balType := range balTypes {
+			bal, err := wallet.GetBalanceMinConfType(acct, 0, balType)
+			if err != nil {
+				return nil, err
+			}
+			accountBalances[acct][balType] = bal
+		}
+	}
+
 	balAllAll, err := wallet.GetBalanceMinConfType("*", 0, "all")
-	balAllDefault, err := wallet.GetBalanceMinConfType("default", 0, "all")
+	balAllDefault := accountBalances["default"]["all"] // wallet.GetBalanceMinConfType("default", 0, "all")
 
 	balSpendableAll, err := wallet.GetBalance("*")
-	balSpendableDefault, err := wallet.GetBalance("default")
+	balSpendableDefault := accountBalances["default"]["spendable"] // wallet.GetBalance("default")
 
 	balLockedAll, err := wallet.GetBalanceMinConfType("*", 0, "locked")
-	balLockedDefault, err := wallet.GetBalanceMinConfType("default", 0, "locked")
-	balLockedImported, err := wallet.GetBalanceMinConfType("imported", 0, "locked")
+	balLockedDefault := accountBalances["default"]["locked"]   // wallet.GetBalanceMinConfType("default", 0, "locked")
+	balLockedImported := accountBalances["imported"]["locked"] // wallet.GetBalanceMinConfType("imported", 0, "locked")
 
 	balances := &WalletBalances{
 		AllAllAcounts:           balAllAll.ToCoin(),
@@ -133,6 +152,7 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 		walletInfo:       walletInfo,
 		stakeinfo:        getStakeInfoRes,
 		balances:         balances,
+		accountBalances:  &accountBalances,
 		priceWindowNum:   int(height / winSize),
 		idxBlockInWindow: int(height%winSize) + 1,
 	}

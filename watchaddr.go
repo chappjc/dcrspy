@@ -26,6 +26,7 @@ type emailConfig struct {
 // TxAction is what is happening to the transaction (mined or inserted into
 // mempool).
 type TxAction int32
+
 // Valid values for TxAction
 const (
 	TxMined TxAction = 1 << iota
@@ -141,7 +142,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 						log.Infof(recvString)
 						// Email notification if watchaddress has the ",1"
 						// suffix AND we have a non-nil *emailConfig
-						if ((addrActn & txAction) > 0 && emailConf != nil) {
+						if (addrActn&txAction) > 0 && emailConf != nil {
 							go sendEmailWatchRecv(recvString, emailConf)
 						}
 						continue
@@ -189,6 +190,9 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 			} else {
 				action = "inserted into mempool."
 			}
+
+			log.Debugf("Transaction with watched address as previous outpoint (spending) %s. Hash: %v",
+				action, tx.Sha().String())
 
 			for _, txIn := range tx.MsgTx().TxIn {
 				prevOut := &txIn.PreviousOutPoint

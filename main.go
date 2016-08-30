@@ -340,7 +340,7 @@ func mainCore() int {
 
 	emailConfig, err := getEmailConfig(cfg)
 	if needEmail && err != nil {
-		log.Error(err)
+		log.Error("Error parsing email configuration: ", err)
 		return 16
 	}
 

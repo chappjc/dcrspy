@@ -354,7 +354,13 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 
 	fmt.Printf("\nWallet and Stake Info at Height %v:\n", data.height)
 
-	fmt.Println("- Balances")
+	fmt.Println("- Balances (by account)")
+	for acct, balances := range *data.accountBalances {
+		fmt.Printf("\tBalances (%s): \t %10.4f (any), %10.4f (spendable), %10.4f (locked)\n",
+			acct, balances["all"].ToCoin(), balances["spendable"].ToCoin(),
+			balances["locked"].ToCoin())
+	}
+	fmt.Println("- Balances (by type)")
 	fmt.Printf("\tBalances (spendable):  %9.4f (default), %9.4f (all)\n",
 		data.balances.SpendableDefaultAccount,
 		data.balances.SpendableAllAccounts)
