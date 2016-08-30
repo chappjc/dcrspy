@@ -229,7 +229,10 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 		if err != nil {
 			return nil, err
 		}
-		avgPricePoolAmt := poolValue / dcrutil.Amount(poolSize)
+		avgPricePoolAmt := dcrutil.Amount(0)
+		if poolSize != 0 {
+			avgPricePoolAmt = poolValue / dcrutil.Amount(poolSize)
+		}
 
 		ticketPoolInfo = TicketPoolInfo{poolSize, poolValue.ToCoin(),
 			avgPricePoolAmt.ToCoin()}
