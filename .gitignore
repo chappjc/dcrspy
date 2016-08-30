@@ -35,3 +35,6 @@ releases
 # IntelliJ IDEA
 .idea
 *.iml
+
+# Glide
+vendor/

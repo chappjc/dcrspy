@@ -1,0 +1,36 @@
+package: github.com/chappjc/dcrspy
+import:
+- package: github.com/btcsuite/btclog
+- package: github.com/btcsuite/fastsha256
+- package: github.com/btcsuite/go-flags
+  version: 1679536dcc895411a9f5848d9a0250be7856448c
+- package: github.com/btcsuite/go-socks/socks
+- package: github.com/btcsuite/golangcrypto
+  subpackages:
+  - ripemd160
+- package: github.com/btcsuite/seelog
+- package: github.com/btcsuite/websocket
+- package: github.com/decred/blake256
+- package: github.com/decred/dcrd
+  version: v0.3.0
+  subpackages:
+  - blockchain
+  - blockchain/stake
+  - chaincfg
+  - chaincfg/chainec
+  - chaincfg/chainhash
+  - database
+  - dcrec/edwards
+  - dcrec/secp256k1
+  - dcrec/secp256k1/schorr
+  - dcrjson
+  - txscript
+  - wire
+- package: github.com/decred/dcrrpcclient
+- package: github.com/decred/dcrutil
+  subpackages:
+  - base58
+- package: github.com/decred/dcrwallet/netparams
+- package: github.com/decred/ed25519
+  subpackages:
+  - edwards25519
