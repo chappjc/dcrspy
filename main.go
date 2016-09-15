@@ -3,9 +3,10 @@
 // and responding when a new block is detected via a notifier registered with
 // dcrd.
 //
-// Two types of information are monitored:
+// Types of information monitored:
 //	1. Block chain data (from dcrd)
 //  2. Stake information (from your wallet)
+//  3. mempool (from dcrd)
 //
 // See README.md and TODO for more information.
 //
@@ -47,11 +48,14 @@ type watchedAddrTx struct {
 const (
 	// blockConnChanBuffer is the size of the block connected channel buffer.
 	blockConnChanBuffer = 8
-	// newTxChanBuffer is the size of the new transaction channel buffer
+	// newTxChanBuffer is the size of the new transaction channel buffer, for
+	// any transactions are added into mempool.
 	newTxChanBuffer = 2000
-	// recvTxChanBuffer is the size of the receive transaction channel buffer
+	// recvTxChanBuffer is the size of the receive transaction channel buffer,
+	// for transactions sending to a registered address.
 	recvTxChanBuffer = 128
-	// sendTxChanBuffer is the size of the send transaction channel buffer
+	// sendTxChanBuffer is the size of the send transaction channel buffer,
+	// for transactions redeeming funds associated with a registered address.
 	sendTxChanBuffer = 128
 
 	spyart = `
@@ -64,7 +68,8 @@ const (
 `
 )
 
-// mainCore does all the work. Deferred functions do not run after os.Exit().
+// mainCore does all the work. Deferred functions do not run after os.Exit(),
+// so main wraps this function, which returns a code.
 func mainCore() int {
 	// Parse the configuration file.
 	cfg, err := loadConfig()
@@ -142,7 +147,8 @@ func mainCore() int {
 				}
 
 				// replace %h and %n with hash and block height, resp.
-				rep := strings.NewReplacer("%h", hash.String(), "%n", strconv.Itoa(int(height)))
+				rep := strings.NewReplacer("%h", hash.String(), "%n",
+					strconv.Itoa(int(height)))
 				var argSubst bytes.Buffer
 				rep.WriteString(&argSubst, args)
 
@@ -259,8 +265,8 @@ func mainCore() int {
 	if !cfg.DisableClientTLS {
 		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
 		if err != nil {
-			fmt.Printf("Failed to read dcrd cert file at %s: %s\n", cfg.DcrdCert,
-				err.Error())
+			fmt.Printf("Failed to read dcrd cert file at %s: %s\n",
+				cfg.DcrdCert, err.Error())
 			return 3
 		}
 	}
@@ -287,7 +293,7 @@ func mainCore() int {
 	// Display connected network
 	curnet, err := dcrdClient.GetCurrentNet()
 	if err != nil {
-		fmt.Printf("Unable to get current network from dcrd: %s\n", err.Error())
+		fmt.Println("Unable to get current network from dcrd:", err.Error())
 		return 5
 	}
 	log.Infof("Connected to dcrd on network: %v", curnet.String())
@@ -413,7 +419,8 @@ func mainCore() int {
 		if err != nil {
 			fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
 				" wanted to start with --nostakeinfo?\n", err.Error())
-			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v", cfg.DcrwCert)
+			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v",
+				cfg.DcrwCert)
 			return 8
 		}
 	}
@@ -477,7 +484,8 @@ func mainCore() int {
 
 	if cfg.DumpAllMPTix {
 		log.Debugf("Dumping all mempool tickets to file in %s.\n", cfg.OutFolder)
-		mempoolFeeDumper := NewMempoolFeeDumper(cfg.OutFolder, "mempool-fees", saverMutexFiles)
+		mempoolFeeDumper := NewMempoolFeeDumper(cfg.OutFolder, "mempool-fees",
+			saverMutexFiles)
 		mempoolSavers = append(mempoolSavers, mempoolFeeDumper)
 	}
 
@@ -588,7 +596,8 @@ func mainCore() int {
 	// No addresses is implied if NoMonitor is true.
 	if len(addresses) > 0 {
 		wg.Add(2)
-		go handleReceivingTx(dcrdClient, addrMap, emailConfig, recvTxChan, &wg, quit)
+		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
+			recvTxChan, &wg, quit)
 		go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 

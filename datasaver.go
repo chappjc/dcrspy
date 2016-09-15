@@ -134,26 +134,25 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 
 	fmt.Printf("\nBlock %v:\n", data.header.Height)
 
-	var err error
-	_, err = fmt.Printf("\tStake difficulty:                 %9.3f -> %.3f (current -> next block)\n",
+	fmt.Printf("\tStake difficulty:                 %9.3f -> %.3f (current -> next block)\n",
 		data.currentstakediff.CurrentStakeDifficulty,
 		data.currentstakediff.NextStakeDifficulty)
 
-	_, err = fmt.Printf("\tEstimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
+	fmt.Printf("\tEstimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
 		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
-	_, err = fmt.Printf("\tWindow progress:   %3d / %3d  of price window number %v\n",
+	fmt.Printf("\tWindow progress:   %3d / %3d  of price window number %v\n",
 		data.idxBlockInWindow, winSize, data.priceWindowNum)
 
-	_, err = fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
+	fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
 		data.feeinfo.Mean, data.feeinfo.Median, data.feeinfo.StdDev,
 		data.feeinfo.Number)
 
 	if data.poolinfo.PoolValue >= 0 {
-		_, err = fmt.Printf("\tTicket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
+		fmt.Printf("\tTicket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
 			data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
 	}
 
-	return err
+	return nil
 }
 
 // Store writes blockData to a file in JSON format
@@ -301,7 +300,8 @@ func NewStakeInfoDataToSummaryStdOut(m ...*sync.Mutex) *StakeInfoDataToSummarySt
 
 // NewStakeInfoDataToJSONFiles creates a new StakeInfoDataToJSONFiles with optional
 // existing mutex
-func NewStakeInfoDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
+func NewStakeInfoDataToJSONFiles(folder string, fileBase string,
+	m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
@@ -360,6 +360,7 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 			acct, balances["all"].ToCoin(), balances["spendable"].ToCoin(),
 			balances["locked"].ToCoin())
 	}
+
 	fmt.Println("- Balances (by type)")
 	fmt.Printf("\tBalances (spendable):  %9.4f (default), %9.4f (all)\n",
 		data.balances.SpendableDefaultAccount,
@@ -370,13 +371,6 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 		data.balances.LockedImportedAccount)
 	fmt.Printf("\tBalances (any):        %9.4f (default), %9.4f (all)\n",
 		data.balances.AllDefaultAcount, data.balances.AllAllAcounts)
-
-	// _, err = fmt.Printf("\tBalances (all accounts):    %5.4f (S), %5.4f (L), %5.4d (A)\n",
-	// 	data.balances.spendableAllAccounts, data.balances.lockedAllAccounts,
-	// 	data.balances.allAllAcounts)
-	// _, err = fmt.Printf("\tBalances (default):    %5.4f (S), %5.4f (L), %5.4d (A)\n",
-	// 	data.balances.spendableDefaultAccount, data.balances.lockedDefaultAccount,
-	// 	data.balances.allDefaultAcount)
 
 	fmt.Println("- Stake Info")
 	fmt.Printf("        ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
@@ -392,6 +386,14 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 
 	fmt.Printf("\tWallet's price:  %10.05f;  fee:   %.4f / KiB\n",
 		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)
+
+	balanceSpendable := data.balances.SpendableAllAccounts
+	ticketFee := (550 * data.walletInfo.TicketFee) / 1000
+	// TODO: split Tx fee
+	splitTxFee := 0.05
+	ticketCost := ticketFee + data.stakeinfo.Difficulty + splitTxFee
+	fmt.Printf("\t    (Approximately %.1f tickets may be purchased with set fee.)\n",
+		balanceSpendable/ticketCost)
 
 	fmt.Printf("\tTotals: %10d  votes,  %9.2f subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)

@@ -303,7 +303,8 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 
 	// Time this function
 	defer func(start time.Time) {
-		mempoolLog.Tracef("mempoolDataCollector.collect() completed in %v", time.Since(start))
+		mempoolLog.Tracef("mempoolDataCollector.collect() completed in %v",
+			time.Since(start))
 	}(time.Now())
 
 	// client
@@ -475,7 +476,8 @@ func NewMempoolFeeDumper(folder string, fileBase string, m ...*sync.Mutex) *Memp
 
 // NewMempoolDataToJSONFiles creates a new MempoolDataToJSONFiles with optional
 // existing mutex
-func NewMempoolDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex) *MempoolDataToJSONFiles {
+func NewMempoolDataToJSONFiles(folder string, fileBase string,
+	m ...*sync.Mutex) *MempoolDataToJSONFiles {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
