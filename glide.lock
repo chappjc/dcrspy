@@ -1,5 +1,5 @@
-hash: 65354785cef7525ed6f4a155fd51e9201af96636fc3f53b66966a2baa61b24c0
-updated: 2016-09-14T23:27:16.378442955-07:00
+hash: b76b114d3669bbb7b6638ee8942b2890160be15f2164ea11a97c0bb961b88667
+updated: 2016-09-14T23:44:38.499682452-07:00
 imports:
 - name: github.com/btcsuite/btclog
   version: 73889fb79bd687870312b6e40effcecffbd57d30
@@ -38,7 +38,7 @@ imports:
   - txscript
   - wire
 - name: github.com/decred/dcrrpcclient
-  version: 103ed11be3a7035554d3925fbfaa67742641510f
+  version: f3c620d63cb02aec0c1152a72d3c8669b92a2fb5
 - name: github.com/decred/dcrutil
   version: 4a3bdb1cb08b49811674750998363b8b8ccfd66e
   subpackages:

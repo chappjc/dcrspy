@@ -27,6 +27,7 @@ import:
   - txscript
   - wire
 - package: github.com/decred/dcrrpcclient
+  version: v0.1.6
 - package: github.com/decred/dcrutil
   subpackages:
   - base58
