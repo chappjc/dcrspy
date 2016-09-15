@@ -12,7 +12,7 @@ import:
 - package: github.com/btcsuite/websocket
 - package: github.com/decred/blake256
 - package: github.com/decred/dcrd
-  version: v0.3.0
+  version: v0.4.0
   subpackages:
   - blockchain
   - blockchain/stake
@@ -30,7 +30,10 @@ import:
 - package: github.com/decred/dcrutil
   subpackages:
   - base58
-- package: github.com/decred/dcrwallet/netparams
+- package: github.com/decred/dcrwallet
+  version: v0.4.0
+  subpackages:
+  - netparams
 - package: github.com/decred/ed25519
   subpackages:
   - edwards25519
