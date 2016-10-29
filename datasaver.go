@@ -153,6 +153,8 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 			data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
 	}
 
+	fmt.Printf("\tNode connections:  %d\n", data.connections)
+
 	return nil
 }
 
@@ -398,8 +400,8 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 
 	fmt.Printf("\tTotals: %10d  votes,  %9.2f subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
-	fmt.Printf("\t        %10d missed,  %9d revoked\n\n",
-		data.stakeinfo.Missed, data.stakeinfo.Revoked)
+	fmt.Printf("\t        %10d missed,  %9d revoked (%d expired)\n\n",
+		data.stakeinfo.Missed, data.stakeinfo.Revoked, data.stakeinfo.Expired)
 
 	return nil
 }

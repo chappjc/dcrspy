@@ -11,7 +11,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
-	//"github.com/decred/dcrd/chaincfg/chainhash"
+
 	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
@@ -103,7 +103,7 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 
 				// See if the transaction is a ticket purchase.  If not, just
 				// make a note of it and go back to the loop.
-				txType := stake.DetermineTxType(tx)
+				txType := stake.DetermineTxType(tx.MsgTx())
 				//s.Tree() == dcrutil.TxTreeRegular
 				// See dcrd/blockchain/stake/staketx.go for information about
 				// specifications for different transaction types (TODO).

@@ -20,7 +20,6 @@ package main
 import (
 	"bufio"
 	"bytes"
-	_ "encoding/hex"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -33,7 +32,6 @@ import (
 	"sync"
 	"time"
 
-	//"github.com/davecgh/go-spew/spew"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrrpcclient"

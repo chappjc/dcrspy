@@ -16,8 +16,6 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
-	//"github.com/decred/dcrd/wire"
-	//"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
 )
@@ -172,6 +170,7 @@ type TicketPoolInfo struct {
 // consider if pointers are desirable here
 type blockData struct {
 	header           dcrjson.GetBlockHeaderVerboseResult
+	connections      int32
 	feeinfo          dcrjson.FeeInfoBlock
 	currentstakediff dcrjson.GetStakeDifficultyResult
 	eststakediff     dcrjson.EstimateStakeDiffResult
@@ -280,6 +279,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// To get difficulty, use getinfo or getmininginfo
 	info, err := t.dcrdChainSvr.GetInfo()
+	//t.dcrdChainSvr.GetConnectionCount()
 
 	// blockVerbose, err := t.dcrdChainSvr.GetBlockVerbose(bestBlockHash, false)
 	// if err != nil {
@@ -323,6 +323,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 	winSize := uint32(activeNet.StakeDiffWindowSize)
 	blockdata := &blockData{
 		header:           blockHeaderResults,
+		connections:      info.Connections,
 		feeinfo:          feeInfoBlock,
 		currentstakediff: *stakeDiff,
 		eststakediff:     *estStakeDiff,
