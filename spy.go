@@ -7,12 +7,9 @@
 package main
 
 import (
-	_ "errors"
-	_ "fmt"
 	"strings"
 	"sync"
 	"time"
-	//"github.com/davecgh/go-spew/spew"
 )
 
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
@@ -151,7 +148,7 @@ out:
 
 			for _, s := range p.dataSavers {
 				if s != nil {
-					// save data to whereever the saver wants to put it
+					// save data to wherever the saver wants to put it
 					go s.Store(stakeInfo)
 				}
 			}

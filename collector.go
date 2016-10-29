@@ -74,7 +74,8 @@ func (t stakeInfoDataCollector) getHeight() (uint32, error) {
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	// Time this function
 	defer func(start time.Time) {
-		log.Tracef("stakeInfoDataCollector.collect() completed in %v", time.Since(start))
+		log.Tracef("stakeInfoDataCollector.collect() completed in %v",
+			time.Since(start))
 	}(time.Now())
 
 	// Client pointer, simply named

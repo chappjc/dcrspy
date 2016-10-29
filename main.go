@@ -53,7 +53,7 @@ const (
 	newTxChanBuffer = 2000
 	// recvTxChanBuffer is the size of the receive transaction channel buffer,
 	// for transactions sending to a registered address.
-	recvTxChanBuffer = 128
+	recvTxChanBuffer = 1280
 	// sendTxChanBuffer is the size of the send transaction channel buffer,
 	// for transactions redeeming funds associated with a registered address.
 	sendTxChanBuffer = 128
@@ -84,7 +84,7 @@ func mainCore() int {
 	log.Infof(appName+" version %s%v", ver.String(), spyart)
 
 	// Create data output folder if it does not already exist
-	err = os.MkdirAll(cfg.OutFolder, 0755)
+	err = os.MkdirAll(cfg.OutFolder, 0750)
 	if err != nil {
 		fmt.Printf("Failed to create data output folder %s. Error: %s\n",
 			cfg.OutFolder, err.Error())
@@ -108,7 +108,8 @@ func mainCore() int {
 	// mempool: new transactions, new tickets
 	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
 	if cfg.MonitorMempool && cfg.NoMonitor {
-		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified.  Not monitoring mempool.")
+		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified. " +
+			"Not monitoring mempool.")
 		cfg.MonitorMempool = false
 	}
 
@@ -351,21 +352,21 @@ func mainCore() int {
 	}
 
 	// Register for block connection notifications.
-	if err := dcrdClient.NotifyBlocks(); err != nil {
+	if err = dcrdClient.NotifyBlocks(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"block notifications: %s\n", err.Error())
 		return 7
 	}
 
 	// Register for stake difficulty change notifications.
-	if err := dcrdClient.NotifyStakeDifficulty(); err != nil {
+	if err = dcrdClient.NotifyStakeDifficulty(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"stake difficulty change notifications: %s\n", err.Error())
 		return 7
 	}
 
 	// Register for tx accepted into mempool ntfns
-	if err := dcrdClient.NotifyNewTransactions(false); err != nil {
+	if err = dcrdClient.NotifyNewTransactions(false); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"new transaction (mempool) notifications: %s\n", err.Error())
 		return 7
@@ -381,7 +382,7 @@ func mainCore() int {
 
 	// For OnRedeemingTx (spend) and OnRecvTx
 	if len(addresses) > 0 {
-		if err := dcrdClient.NotifyReceived(addresses); err != nil {
+		if err = dcrdClient.NotifyReceived(addresses); err != nil {
 			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
 			return 7
 		}
@@ -453,9 +454,12 @@ func mainCore() int {
 	var mempoolSavers []MempoolDataSaver
 	// JSON to stdout
 	if cfg.SaveJSONStdout {
-		blockDataSavers = append(blockDataSavers, NewBlockDataToJSONStdOut(saverMutexTerm))
-		stakeInfoDataSavers = append(stakeInfoDataSavers, NewStakeInfoDataToJSONStdOut(saverMutexTerm))
-		mempoolSavers = append(mempoolSavers, NewMempoolDataToJSONStdOut(saverMutexTerm))
+		blockDataSavers = append(blockDataSavers,
+			NewBlockDataToJSONStdOut(saverMutexTerm))
+		stakeInfoDataSavers = append(stakeInfoDataSavers,
+			NewStakeInfoDataToJSONStdOut(saverMutexTerm))
+		mempoolSavers = append(mempoolSavers,
+			NewMempoolDataToJSONStdOut(saverMutexTerm))
 	}
 	// JSON to file
 	if cfg.SaveJSONFile {
@@ -501,12 +505,14 @@ func mainCore() int {
 	// Initial data summary prior to start of regular collection
 	blockData, err := collector.collect(!cfg.PoolValue)
 	if err != nil {
-		fmt.Printf("Block data collection for initial summary failed. Error: %v", err.Error())
+		fmt.Printf("Block data collection for initial summary failed: %v",
+			err.Error())
 		return 10
 	}
 
 	if err := summarySaverBlockData.Store(blockData); err != nil {
-		fmt.Printf("Failed to print initial block data summary. Error: %v", err.Error())
+		fmt.Printf("Failed to print initial block data summary: %v",
+			err.Error())
 		return 11
 	}
 
@@ -539,12 +545,14 @@ func mainCore() int {
 		}
 		stakeInfoData, err := stakeCollector.collect(height)
 		if err != nil {
-			fmt.Printf("Stake info data collection failed gathering initial data. Error: %v", err.Error())
+			fmt.Printf("Stake info data collection failed gathering initial"+
+				"data: %v", err.Error())
 			return 12
 		}
 
 		if err := summarySaverStakeInfo.Store(stakeInfoData); err != nil {
-			fmt.Printf("Failed to print initial stake info data summary. Error: %v", err.Error())
+			fmt.Printf("Failed to print initial stake info data summary: %v",
+				err.Error())
 			return 12
 		}
 
@@ -567,12 +575,14 @@ func mainCore() int {
 
 		mempoolInfo, err := mpoolCollector.collect()
 		if err != nil {
-			fmt.Printf("Mempool info collection failed while gathering initial data. Error: %v", err.Error())
+			fmt.Printf("Mempool info collection failed while gathering initial"+
+				"data: %v", err.Error())
 			return 14
 		}
 
 		if err := summarySaverMempool.Store(mempoolInfo); err != nil {
-			fmt.Printf("Failed to print initial mempool info summary. Error: %v", err.Error())
+			fmt.Printf("Failed to print initial mempool info summary: %v",
+				err.Error())
 			return 15
 		}
 

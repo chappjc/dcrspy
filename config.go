@@ -36,10 +36,10 @@ var (
 	dcrdHomeDir      = dcrutil.AppDataDir("dcrd", false)
 	dcrwalletHomeDir = dcrutil.AppDataDir("dcrwallet", false)
 	//dcrspyHomeDir            = dcrutil.AppDataDir("dcrspy", false)
-	defaultDaemonRPCKeyFile  = filepath.Join(dcrdHomeDir, "rpc.key")
+	//defaultDaemonRPCKeyFile  = filepath.Join(dcrdHomeDir, "rpc.key")
 	defaultDaemonRPCCertFile = filepath.Join(dcrdHomeDir, "rpc.cert")
 	defaultConfigFile        = filepath.Join(curDir, defaultConfigFilename)
-	defaultWalletRPCKeyFile  = filepath.Join(dcrwalletHomeDir, "rpc.key")
+	//defaultWalletRPCKeyFile  = filepath.Join(dcrwalletHomeDir, "rpc.key")
 	defaultWalletRPCCertFile = filepath.Join(dcrwalletHomeDir, "rpc.cert")
 	defaultLogDir            = filepath.Join(curDir, defaultLogDirname)
 	defaultOutputDir         = filepath.Join(curDir, defaultOutputDirname)
@@ -373,7 +373,7 @@ func loadConfig() (*config, error) {
 		cfg.DebugLevel = "error"
 	}
 	if err := parseAndSetDebugLevels(cfg.DebugLevel); err != nil {
-		err := fmt.Errorf("%s: %v", "loadConfig", err.Error())
+		err = fmt.Errorf("%s: %v", "loadConfig", err.Error())
 		fmt.Fprintln(os.Stderr, err)
 		parser.WriteHelp(os.Stderr)
 		return loadConfigError(err)

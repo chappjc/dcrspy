@@ -19,7 +19,7 @@ import (
 	"github.com/decred/dcrutil"
 )
 
-var resetMempoolTix bool
+//var resetMempoolTix bool
 
 type mempoolInfo struct {
 	currentHeight               uint32
@@ -168,7 +168,8 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			p.mtx.Lock()
 			// Atomics really aren't necessary here because of mutex
 			newBlock := txHeight > p.mpoolInfo.currentHeight
-			enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, oneTicket) >= p.newTicketLimit
+			enoughNewTickets := atomic.AddInt32(
+				&p.mpoolInfo.numTicketsSinceStatsReport, oneTicket) >= p.newTicketLimit
 			timeSinceLast := time.Since(p.mpoolInfo.lastCollectTime)
 			quiteLong := timeSinceLast > p.maxInterval
 			longEnough := timeSinceLast >= p.minInterval
@@ -223,7 +224,8 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 func (p *mempoolMonitor) maybeCollect(txHeight uint32) (*mempoolData, error) {
 	p.mtx.Lock()
 	newBlock := txHeight > p.mpoolInfo.currentHeight
-	enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport, 1) > p.newTicketLimit
+	enoughNewTickets := atomic.AddInt32(&p.mpoolInfo.numTicketsSinceStatsReport,
+		1) > p.newTicketLimit
 	timeSinceLast := time.Since(p.mpoolInfo.lastCollectTime)
 	quiteLong := timeSinceLast > p.maxInterval
 	longEnough := timeSinceLast > p.minInterval
@@ -422,9 +424,9 @@ type MempoolFeeDumper struct {
 
 // MempoolDataToMySQL implements MempoolDataSaver interface for output to a
 // MySQL database
-type MempoolDataToMySQL struct {
-	mtx *sync.Mutex
-}
+// type MempoolDataToMySQL struct {
+// 	mtx *sync.Mutex
+// }
 
 // NewMempoolDataToJSONStdOut creates a new MempoolDataToJSONStdOut with optional
 // existing mutex
@@ -606,11 +608,11 @@ func (s *MempoolDataToJSONFiles) Store(data *mempoolData) error {
 		data.numTickets)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
-	defer fp.Close()
 	if err != nil {
 		mempoolLog.Errorf("Unable to open file %v for writting.", fullfile)
 		return err
 	}
+	defer fp.Close()
 
 	s.file = *fp
 	_, err = writeFormattedJSONMempoolData(jsonConcat, &s.file)
@@ -639,11 +641,11 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	fname := fmt.Sprintf("%s.json", s.nameBase)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
-	defer fp.Close()
 	if err != nil {
 		mempoolLog.Errorf("Unable to open file %v for writting.", fullfile)
 		return err
 	}
+	defer fp.Close()
 
 	mempoolLog.Debug("Writting all fees.")
 	j, err := json.MarshalIndent(struct {

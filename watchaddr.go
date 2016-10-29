@@ -6,12 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"net/smtp"
-	//"strings"
 	"strconv"
 	"sync"
 
-	_ "github.com/decred/dcrd/chaincfg/chainhash"
-	_ "github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
@@ -91,7 +88,7 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 
 // handleReceivingTx should be run as a go routine, and handles notification
 // of transactions receiving to a registered address.  If no email notification
-// is requried, emailConf may be a nil pointer.  addrs is a map of addresses as
+// is required, emailConf may be a nil pointer.  addrs is a map of addresses as
 // strings with bool values indicating if email should be sent in response to
 // transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,

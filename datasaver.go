@@ -50,9 +50,9 @@ type BlockDataToJSONFiles struct {
 
 // BlockDataToMySQL implements BlockDataSaver interface for output to a
 // MySQL database
-type BlockDataToMySQL struct {
-	mtx *sync.Mutex
-}
+// type BlockDataToMySQL struct {
+// 	mtx *sync.Mutex
+// }
 
 // NewBlockDataToJSONStdOut creates a new BlockDataToJSONStdOut with optional
 // existing mutex
@@ -66,8 +66,8 @@ func NewBlockDataToJSONStdOut(m ...*sync.Mutex) *BlockDataToJSONStdOut {
 	return &BlockDataToJSONStdOut{}
 }
 
-// NewBlockDataToSummaryStdOut creates a new BlockDataToSummaryStdOut with optional
-// existing mutex
+// NewBlockDataToSummaryStdOut creates a new BlockDataToSummaryStdOut with
+// optional existing mutex
 func NewBlockDataToSummaryStdOut(m ...*sync.Mutex) *BlockDataToSummaryStdOut {
 	if len(m) > 1 {
 		panic("Too many inputs.")
@@ -80,7 +80,8 @@ func NewBlockDataToSummaryStdOut(m ...*sync.Mutex) *BlockDataToSummaryStdOut {
 
 // NewBlockDataToJSONFiles creates a new BlockDataToJSONFiles with optional
 // existing mutex
-func NewBlockDataToJSONFiles(folder string, fileBase string, m ...*sync.Mutex) *BlockDataToJSONFiles {
+func NewBlockDataToJSONFiles(folder string, fileBase string,
+	m ...*sync.Mutex) *BlockDataToJSONFiles {
 	if len(m) > 1 {
 		panic("Too many inputs.")
 	}
@@ -174,11 +175,11 @@ func (s *BlockDataToJSONFiles) Store(data *blockData) error {
 	fname := fmt.Sprintf("%s%d.json", s.nameBase, height)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
-	defer fp.Close()
 	if err != nil {
-		log.Errorf("Unable to open file %v for writting.", fullfile)
+		log.Errorf("Unable to open file %v for writing.", fullfile)
 		return err
 	}
+	defer fp.Close()
 
 	s.file = *fp
 	_, err = writeFormattedJSONBlockData(jsonConcat, &s.file)
@@ -270,12 +271,12 @@ type StakeInfoDataToJSONFiles struct {
 
 // StakeInfoDataToMySQL implements StakeInfoDataSaver interface for output to a
 // MySQL database
-type StakeInfoDataToMySQL struct {
-	mtx *sync.Mutex
-}
+// type StakeInfoDataToMySQL struct {
+// 	mtx *sync.Mutex
+// }
 
-// NewStakeInfoDataToJSONStdOut creates a new StakeInfoDataToJSONStdOut with optional
-// existing mutex
+// NewStakeInfoDataToJSONStdOut creates a new StakeInfoDataToJSONStdOut with
+// optional existing mutex
 func NewStakeInfoDataToJSONStdOut(m ...*sync.Mutex) *StakeInfoDataToJSONStdOut {
 	if len(m) > 1 {
 		panic("Too many inputs.")
@@ -286,8 +287,8 @@ func NewStakeInfoDataToJSONStdOut(m ...*sync.Mutex) *StakeInfoDataToJSONStdOut {
 	return &StakeInfoDataToJSONStdOut{}
 }
 
-// NewStakeInfoDataToSummaryStdOut creates a new StakeInfoDataToSummaryStdOut with optional
-// existing mutex
+// NewStakeInfoDataToSummaryStdOut creates a new StakeInfoDataToSummaryStdOut
+// with optional existing mutex
 func NewStakeInfoDataToSummaryStdOut(m ...*sync.Mutex) *StakeInfoDataToSummaryStdOut {
 	if len(m) > 1 {
 		panic("Too many inputs.")
@@ -298,8 +299,8 @@ func NewStakeInfoDataToSummaryStdOut(m ...*sync.Mutex) *StakeInfoDataToSummarySt
 	return &StakeInfoDataToSummaryStdOut{}
 }
 
-// NewStakeInfoDataToJSONFiles creates a new StakeInfoDataToJSONFiles with optional
-// existing mutex
+// NewStakeInfoDataToJSONFiles creates a new StakeInfoDataToJSONFiles with
+// optional existing mutex
 func NewStakeInfoDataToJSONFiles(folder string, fileBase string,
 	m ...*sync.Mutex) *StakeInfoDataToJSONFiles {
 	if len(m) > 1 {
@@ -422,11 +423,11 @@ func (s *StakeInfoDataToJSONFiles) Store(data *stakeInfoData) error {
 	fname := fmt.Sprintf("%s%d.json", s.nameBase, height)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
-	defer fp.Close()
 	if err != nil {
-		log.Errorf("Unable to open file %v for writting.", fullfile)
+		log.Errorf("Unable to open file %v for writing.", fullfile)
 		return err
 	}
+	defer fp.Close()
 
 	s.file = *fp
 	//_, err = writeFormattedJSONStakeInfoData(jsonConcat, &s.file)
