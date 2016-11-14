@@ -36,11 +36,13 @@ import (
 	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
+	"github.com/decred/dcrd/wire"
+	"github.com/decred/dcrwallet/wtxmgr"
 )
 
 type watchedAddrTx struct {
 	transaction *dcrutil.Tx
-	details     *dcrjson.BlockDetails
+	details     *int //*dcrjson.BlockDetails
 }
 
 const (
@@ -55,6 +57,8 @@ const (
 	// sendTxChanBuffer is the size of the send transaction channel buffer,
 	// for transactions redeeming funds associated with a registered address.
 	sendTxChanBuffer = 128
+
+	mempoolTxChanBuffer = 1280
 
 	spyart = `
                        __                          
@@ -118,9 +122,11 @@ func mainCore() int {
 
 	// watchaddress
 	var recvTxChan, spendTxChan chan *watchedAddrTx
+	var mempoolTxChan chan *dcrutil.Tx
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		recvTxChan = make(chan *watchedAddrTx, recvTxChanBuffer)
 		spendTxChan = make(chan *watchedAddrTx, sendTxChanBuffer)
+		mempoolTxChan = make(chan *dcrutil.Tx, mempoolTxChanBuffer)
 	}
 
 	// Like connectChan for block data, connectChanStkInf is used when a new
@@ -135,8 +141,16 @@ func mainCore() int {
 	args := cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
 
 	ntfnHandlersDaemon := dcrrpcclient.NotificationHandlers{
-		OnBlockConnected: func(hash *chainhash.Hash, height int32,
-			time time.Time, vb uint16) {
+		OnBlockConnected: func(blockHeaderSerialized []byte, transactions [][]byte) {
+		// OnBlockConnected: func(hash *chainhash.Hash, height int32,
+		// 	time time.Time, vb uint16) {
+			blockHeader := new(wire.BlockHeader)
+			err := blockHeader.FromBytes(blockHeaderSerialized)
+			if err != nil {
+				log.Error("Failed to serialize blockHeader in new block notification.")
+			}
+			height := int32(blockHeader.Height)
+			hash := blockHeader.BlockSha()
 			select {
 			case connectChan <- height:
 				// Past this point in this case is command execution. Block
@@ -214,27 +228,19 @@ func mainCore() int {
 				log.Debugf("Mined new ticket: %v", tick.String())
 			}
 		},
-		// OnRecvTx is invoked when a transaction that receives funds to a
-		// registered address is received into the memory pool and also
-		// connected to the longest (best) chain.
-		OnRecvTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
-			// To determine if this was mined into a block or accepted into
-			// mempool, we need details, which is nil in the mempool case
-			wAddrTx := &watchedAddrTx{transaction, details}
-			select {
-			case recvTxChan <- wAddrTx:
-				log.Infof("Detected transaction %v receiving funds into registered address.",
-					transaction.Sha().String())
-			default:
+		// OnRelevantTxAccepted is invoked when a transaction containing a
+		// registered address is inserted into mempool.
+		OnRelevantTxAccepted: func(transaction []byte) {
+			rec, err := wtxmgr.NewTxRecord(transaction, time.Now())
+			if err != nil {
+				return
 			}
-		},
-		// spend from registered address (i.e. redeem)
-		OnRedeemingTx: func(transaction *dcrutil.Tx, details *dcrjson.BlockDetails) {
-			wAddrTx := &watchedAddrTx{transaction, details}
+			tx := dcrutil.NewTx(&rec.MsgTx)
+			txHash := rec.Hash
 			select {
-			case spendTxChan <- wAddrTx:
-				log.Infof("Detected transaction %v spending funds from registered address.",
-					transaction.Sha().String())
+			case mempoolTxChan <- tx:
+				log.Infof("Detected transaction %v containing registered address.",
+					txHash.String())
 			default:
 			}
 		},
@@ -336,10 +342,6 @@ func mainCore() int {
 				close(recvTxChan)
 				recvTxChan = nil
 			}
-			if spendTxChan != nil {
-				close(spendTxChan)
-				spendTxChan = nil
-			}
 		}
 	}
 
@@ -378,9 +380,10 @@ func mainCore() int {
 	// 	os.Exit(1)
 	// }
 
-	// For OnRedeemingTx (spend) and OnRecvTx
+	// Register a Tx filter for addresses (receiving).  The filter applies to
+	// OnRelevantTxAccepted.
 	if len(addresses) > 0 {
-		if err = dcrdClient.NotifyReceived(addresses); err != nil {
+		if err = dcrdClient.LoadTxFilter(true, addresses, nil); err != nil {
 			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
 			return 7
 		}

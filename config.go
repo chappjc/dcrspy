@@ -18,6 +18,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrutil"
 	"github.com/decred/dcrwallet/netparams"
+	"github.com/decred/dcrd/dcrjson"
 )
 
 const (
@@ -82,7 +83,8 @@ type config struct {
 	NoCollectStakeInfo bool `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
 	PoolValue          bool `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 
-	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
+	WatchAddresses []string `short:"w" long:"watchaddress" description:"Watched address (receiving). One per line."`
+	WatchOutpoints []string `short:"o" long:"watchout" description:"Watched outpoint (sending). One per line."`
 
 	SMTPUser   string `long:"smtpuser" description:"SMTP user name"`
 	SMTPPass   string `long:"smtppass" description:"SMTP password"`
