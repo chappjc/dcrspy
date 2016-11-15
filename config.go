@@ -18,7 +18,7 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrutil"
 	"github.com/decred/dcrwallet/netparams"
-	"github.com/decred/dcrd/dcrjson"
+	//"github.com/decred/dcrd/dcrjson"
 )
 
 const (

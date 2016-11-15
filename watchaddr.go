@@ -108,12 +108,17 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 			// Make like notifyForTxOuts and screen the transactions TxOuts for
 			// addresses we are watching for.
+			height, _, err := c.GetBestBlock()
+			if err != nil {
+				log.Error("Unable to get best block.")
+				break
+			}
 
 			tx := addrTx.transaction
 			var action string
 			var txAction TxAction
 			if addrTx.details != nil {
-				action = fmt.Sprintf("mined into block %d.", addrTx.details.Height)
+				action = fmt.Sprintf("mined into block %d.", height)
 				txAction = TxMined
 			} else {
 				action = "inserted into mempool."
@@ -179,11 +184,16 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 			// transaction from each PreviousOutPoint's tx hash, and check each
 			// TxOut in the result for each watched address.  Phew! There is
 			// surely a better way, but I don't know it.
+			height, _, err := c.GetBestBlock()
+			if err != nil {
+				log.Error("Unable to get best block.")
+				break
+			}
 
 			tx := addrTx.transaction
 			var action string
 			if addrTx.details != nil {
-				action = fmt.Sprintf("mined into block %d.", addrTx.details.Height)
+				action = fmt.Sprintf("mined into block %d.", height)
 			} else {
 				action = "inserted into mempool."
 			}

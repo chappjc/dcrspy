@@ -33,10 +33,10 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrd/dcrjson"
+	// "github.com/decred/dcrd/dcrjson"
+	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
-	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrwallet/wtxmgr"
 )
 
@@ -142,8 +142,8 @@ func mainCore() int {
 
 	ntfnHandlersDaemon := dcrrpcclient.NotificationHandlers{
 		OnBlockConnected: func(blockHeaderSerialized []byte, transactions [][]byte) {
-		// OnBlockConnected: func(hash *chainhash.Hash, height int32,
-		// 	time time.Time, vb uint16) {
+			// OnBlockConnected: func(hash *chainhash.Hash, height int32,
+			// 	time time.Time, vb uint16) {
 			blockHeader := new(wire.BlockHeader)
 			err := blockHeader.FromBytes(blockHeaderSerialized)
 			if err != nil {
@@ -353,21 +353,21 @@ func mainCore() int {
 
 	// Register for block connection notifications.
 	if err = dcrdClient.NotifyBlocks(); err != nil {
-		fmt.Printf("Failed to register daemon RPC client for  "+
+		fmt.Printf("Failed to register daemon RPC client for "+
 			"block notifications: %s\n", err.Error())
 		return 7
 	}
 
 	// Register for stake difficulty change notifications.
 	if err = dcrdClient.NotifyStakeDifficulty(); err != nil {
-		fmt.Printf("Failed to register daemon RPC client for  "+
+		fmt.Printf("Failed to register daemon RPC client for "+
 			"stake difficulty change notifications: %s\n", err.Error())
 		return 7
 	}
 
 	// Register for tx accepted into mempool ntfns
 	if err = dcrdClient.NotifyNewTransactions(false); err != nil {
-		fmt.Printf("Failed to register daemon RPC client for  "+
+		fmt.Printf("Failed to register daemon RPC client for "+
 			"new transaction (mempool) notifications: %s\n", err.Error())
 		return 7
 	}
@@ -382,6 +382,7 @@ func mainCore() int {
 
 	// Register a Tx filter for addresses (receiving).  The filter applies to
 	// OnRelevantTxAccepted.
+	// TODO: register outpoints (third argument).
 	if len(addresses) > 0 {
 		if err = dcrdClient.LoadTxFilter(true, addresses, nil); err != nil {
 			fmt.Printf("Failed to register addresses.  Error: %v", err.Error())
