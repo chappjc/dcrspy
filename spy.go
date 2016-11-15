@@ -10,22 +10,137 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/txscript"
+	"github.com/decred/dcrrpcclient"
+	"github.com/decred/dcrutil"
 )
+
+func txhashInSlice(txs []*dcrutil.Tx, txHash *chainhash.Hash) *dcrutil.Tx {
+	if len(txs) < 1 {
+		return nil
+	}
+
+	for _, minedTx := range txs {
+		txSha := minedTx.Sha()
+		if txHash.IsEqual(txSha) {
+			return minedTx
+		}
+	}
+	return nil
+}
+
+// includesTx checks if a block contains a transaction hash
+func includesStakeTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
+	blockTxs := block.STransactions()
+
+	if tx := txhashInSlice(blockTxs, txHash); tx != nil {
+		return tx.Index(), tx.Tree()
+	}
+	return -1, -1
+}
+
+// includesTx checks if a block contains a transaction hash
+func includesTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
+	blockTxs := block.Transactions()
+
+	if tx := txhashInSlice(blockTxs, txHash); tx != nil {
+		return tx.Index(), tx.Tree()
+	}
+	return -1, -1
+}
+
+func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]TxAction,
+	c *dcrrpcclient.Client) map[string]*dcrutil.Tx {
+	addrMap := make(map[string]*dcrutil.Tx)
+
+	checkForOutpointAddr := func(blockTxs []*dcrutil.Tx) {
+		for _, tx := range blockTxs {
+			for _, txIn := range tx.MsgTx().TxIn {
+				prevOut := &txIn.PreviousOutPoint
+				// For each TxIn, check the indicated vout index in the txid of the
+				// previous outpoint.
+				// txrr, err := c.GetRawTransactionVerbose(&prevOut.Hash)
+				prevTx, err := c.GetRawTransaction(&prevOut.Hash)
+				if err != nil {
+					log.Error("Unable to get raw transaction for", prevTx)
+					continue
+				}
+
+				// prevOut.Index should tell us which one, but check all anyway
+				for _, txOut := range prevTx.MsgTx().TxOut {
+					_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(
+						txOut.Version, txOut.PkScript, activeChain)
+					if err != nil {
+						log.Infof("ExtractPkScriptAddrs: %v", err.Error())
+						continue
+					}
+
+					for _, txAddr := range txAddrs {
+						addrstr := txAddr.EncodeAddress()
+						if _, ok := addrs[addrstr]; ok {
+							addrMap[addrstr] = prevTx
+							continue
+						}
+					}
+				}
+			}
+		}
+	}
+
+	checkForOutpointAddr(block.Transactions())
+	checkForOutpointAddr(block.STransactions())
+
+	return addrMap
+}
+
+func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
+	c *dcrrpcclient.Client) map[string]*dcrutil.Tx {
+	addrMap := make(map[string][]*dcrutil.Tx)
+
+	checkForOutpointAddr := func(blockTxs []*dcrutil.Tx) {
+		for _, tx := range blockTxs {
+			// Check the addresses associated with the PkScript of each TxOut
+			for _, txOut := range tx.MsgTx().TxOut {
+				_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
+					txOut.PkScript, activeChain)
+				if err != nil {
+					log.Infof("ExtractPkScriptAddrs: %v", err.Error())
+					continue
+				}
+
+				// Check if we are watching any address for this TxOut
+				var recvStrings []string
+				for _, txAddr := range txAddrs {
+					addrstr := txAddr.EncodeAddress()
+					if addrActn, ok := addrs[addrstr]; ok {
+						addrMap[addrstr] = tx
+						continue
+					}
+				}
+			}
+		}
+	}
+}
 
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
 type chainMonitor struct {
 	collector          *blockDataCollector
 	dataSavers         []BlockDataSaver
-	blockConnectedChan chan int32
+	blockConnectedChan chan *chainhash.Hash
 	quit               chan struct{}
 	wg                 *sync.WaitGroup
 	noTicketPool       bool
+	watchaddrs         map[string]TxAction
+	spendTxBlockChan   chan map[string]*dcrutil.Tx
 }
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
-	blockConnChan chan int32, savers []BlockDataSaver,
-	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool) *chainMonitor {
+	blockConnChan chan *chainhash.Hash, savers []BlockDataSaver,
+	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool,
+	addrs map[string]TxAction, spendTxBlockChan chan map[string]*dcrutil.Tx) *chainMonitor {
 	return &chainMonitor{
 		collector:          collector,
 		dataSavers:         savers,
@@ -33,6 +148,8 @@ func newChainMonitor(collector *blockDataCollector,
 		quit:               quit,
 		wg:                 wg,
 		noTicketPool:       noPoolValue,
+		watchaddrs:         addrs,
+		spendTxBlockChan:   spendTxBlockChan,
 	}
 }
 
@@ -44,13 +161,22 @@ out:
 	for {
 	keepon:
 		select {
-		case height, ok := <-p.blockConnectedChan:
+		case hash, ok := <-p.blockConnectedChan:
 			if !ok {
 				log.Warnf("Block connected channel closed.")
 				break out
 			}
+			block, _ := p.collector.dcrdChainSvr.GetBlock(hash)
+			height := block.Height
 			daemonLog.Infof("Block height %v connected", height)
-			//atomic.StoreInt32(&glChainHeight, height)
+
+			if len(p.watchaddrs) > 0 {
+				txsForAddrs := blockConsumesOutpointWithAddress(block, p.watchaddrs,
+					p.collector.dcrdChainSvr)
+				if len(txsForAddrs) > 0 {
+					p.spendTxBlockChan <- txsForAddrs
+				}
+			}
 
 			// data collection with timeout
 			bdataChan := make(chan *blockData)

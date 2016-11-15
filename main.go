@@ -58,7 +58,7 @@ const (
 	// for transactions redeeming funds associated with a registered address.
 	sendTxChanBuffer = 128
 
-	mempoolTxChanBuffer = 1280
+	relevantMempoolTxChanBuffer = 1280
 
 	spyart = `
                        __                          
@@ -95,7 +95,7 @@ func mainCore() int {
 
 	// Connect to dcrd RPC server using websockets. Set up the
 	// notification handler to deliver blocks through a channel.
-	var connectChan chan int32
+	var connectChan chan *chainhash.Hash
 	var stakeDiffChan chan int64
 	// If we're monitoring for blocks OR collecting block data, these channels
 	// are necessary to handle new block notifications. Otherwise, leave them
@@ -103,7 +103,7 @@ func mainCore() int {
 	// blockConnectedHandler) block. default case makes non-blocking below.
 	// quit channel case manages blockConnectedHandlers.
 	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
-		connectChan = make(chan int32, blockConnChanBuffer)
+		connectChan = make(chan *chainhash.Hash, blockConnChanBuffer)
 		stakeDiffChan = make(chan int64, 2)
 	}
 
@@ -121,12 +121,14 @@ func mainCore() int {
 	}
 
 	// watchaddress
-	var recvTxChan, spendTxChan chan *watchedAddrTx
-	var mempoolTxChan chan *dcrutil.Tx
+	var recvTxChan, spendTxChan chan *dcrutil.Tx
+	var spendTxBlockChan chan map[string]*dcrutil.Tx
+	var relevantTxMempoolChan chan *dcrutil.Tx
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
-		recvTxChan = make(chan *watchedAddrTx, recvTxChanBuffer)
-		spendTxChan = make(chan *watchedAddrTx, sendTxChanBuffer)
-		mempoolTxChan = make(chan *dcrutil.Tx, mempoolTxChanBuffer)
+		recvTxChan = make(chan *dcrutil.Tx, recvTxChanBuffer)
+		//spendTxChan = make(chan *watchedAddrTx, sendTxChanBuffer)
+		spendTxBlockChan = make(chan map[string]*dcrutil.Tx, 100)
+		relevantTxMempoolChan = make(chan *dcrutil.Tx, relevantMempoolTxChanBuffer)
 	}
 
 	// Like connectChan for block data, connectChanStkInf is used when a new
@@ -152,7 +154,7 @@ func mainCore() int {
 			height := int32(blockHeader.Height)
 			hash := blockHeader.BlockSha()
 			select {
-			case connectChan <- height:
+			case connectChan <- &hash:
 				// Past this point in this case is command execution. Block
 				// height was sent on connectChan, so move on if no command.
 				if len(cmdName) == 0 {
@@ -207,7 +209,7 @@ func mainCore() int {
 			default:
 			}
 		},
-		// BUG: This appears to be currently broken, notifiying on every block.
+		// Not too useful since this notifies on every block
 		OnStakeDifficulty: func(hash *chainhash.Hash, height int64,
 			stakeDiff int64) {
 			select {
@@ -238,8 +240,8 @@ func mainCore() int {
 			tx := dcrutil.NewTx(&rec.MsgTx)
 			txHash := rec.Hash
 			select {
-			case mempoolTxChan <- tx:
-				log.Infof("Detected transaction %v containing registered address.",
+			case relevantTxMempoolChan <- tx:
+				log.Infof("Detected transaction %v in mempool containing registered address.",
 					txHash.String())
 			default:
 			}
@@ -526,7 +528,8 @@ func mainCore() int {
 		wg.Add(1)
 		// If collector is nil, so is connectChan
 		wsChainMonitor := newChainMonitor(collector, connectChan,
-			blockDataSavers, quit, &wg, !cfg.PoolValue)
+			blockDataSavers, quit, &wg, !cfg.PoolValue,
+			addrMap, spendTxBlockChan)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -610,7 +613,7 @@ func mainCore() int {
 		wg.Add(2)
 		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
 			recvTxChan, &wg, quit)
-		go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
+		//go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 
 	// stakediff not implemented yet as the notifier appears broken

@@ -9,6 +9,8 @@ import (
 	"strconv"
 	"sync"
 
+	"strings"
+
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
@@ -93,14 +95,14 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 // transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	emailConf *emailConfig,
-	recvTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
+	relevantTxMempoolChan <-chan *dcrutil.Tx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
 	//out:
 	for {
 		//keepon:
 		select {
-		case addrTx, ok := <-recvTxChan:
+		case tx, ok := <-relevantTxMempoolChan:
 			if !ok {
 				log.Infof("Receive Tx watch channel closed")
 				return
@@ -114,16 +116,18 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				break
 			}
 
-			tx := addrTx.transaction
+			// TODO also make this function handle mined tx again, with a
+			// gettransaction to see if it's in a block
+
 			var action string
 			var txAction TxAction
-			if addrTx.details != nil {
-				action = fmt.Sprintf("mined into block %d.", height)
-				txAction = TxMined
-			} else {
-				action = "inserted into mempool."
-				txAction = TxInserted
-			}
+			// if addrTx.details != nil {
+			// 	action = fmt.Sprintf("mined into block %d.", height)
+			// 	txAction = TxMined
+			// } else {
+			action = "inserted into mempool."
+			txAction = TxInserted
+			//}
 
 			// Check the addresses associated with the PkScript of each TxOut
 			for _, txOut := range tx.MsgTx().TxOut {
@@ -135,20 +139,26 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 
 				// Check if we are watching any address for this TxOut
+				var recvStrings []string
 				for _, txAddr := range txAddrs {
 					addrstr := txAddr.EncodeAddress()
 					if addrActn, ok := addrs[addrstr]; ok {
-						recvString := fmt.Sprintf("Transaction with watched address %v as outpoint (receiving), value %.6f, %v",
+						recvString := fmt.Sprintf("Transaction with watched address %v as outpoint (receiving), value %.6f, %v\n",
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action)
 						log.Infof(recvString)
 						// Email notification if watchaddress has the ",1"
 						// suffix AND we have a non-nil *emailConfig
 						if (addrActn&txAction) > 0 && emailConf != nil {
-							go sendEmailWatchRecv(recvString, emailConf)
+							recvStrings = append(recvStrings, recvString)
+							//go sendEmailWatchRecv(recvString, emailConf)
 						}
 						continue
 					}
+				}
+
+				if len(recvStrings) > 0 {
+					go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
 				}
 			}
 
