@@ -84,7 +84,7 @@ type config struct {
 	PoolValue          bool `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 
 	WatchAddresses []string `short:"w" long:"watchaddress" description:"Watched address (receiving). One per line."`
-	WatchOutpoints []string `short:"o" long:"watchout" description:"Watched outpoint (sending). One per line."`
+	//WatchOutpoints []string `short:"o" long:"watchout" description:"Watched outpoint (sending). One per line."`
 
 	SMTPUser   string `long:"smtpuser" description:"SMTP user name"`
 	SMTPPass   string `long:"smtppass" description:"SMTP password"`

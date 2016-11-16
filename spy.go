@@ -52,8 +52,8 @@ func includesTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
 }
 
 func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]TxAction,
-	c *dcrrpcclient.Client) map[string]*dcrutil.Tx {
-	addrMap := make(map[string]*dcrutil.Tx)
+	c *dcrrpcclient.Client) map[string][]*dcrutil.Tx {
+	addrMap := make(map[string][]*dcrutil.Tx)
 
 	checkForOutpointAddr := func(blockTxs []*dcrutil.Tx) {
 		for _, tx := range blockTxs {
@@ -64,7 +64,7 @@ func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]T
 				// txrr, err := c.GetRawTransactionVerbose(&prevOut.Hash)
 				prevTx, err := c.GetRawTransaction(&prevOut.Hash)
 				if err != nil {
-					log.Error("Unable to get raw transaction for", prevTx)
+					log.Debug("Unable to get raw transaction for ", prevOut.Hash.String())
 					continue
 				}
 
@@ -80,8 +80,10 @@ func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]T
 					for _, txAddr := range txAddrs {
 						addrstr := txAddr.EncodeAddress()
 						if _, ok := addrs[addrstr]; ok {
-							addrMap[addrstr] = prevTx
-							continue
+							if addrMap[addrstr] == nil {
+								addrMap[addrstr] = make([]*dcrutil.Tx, 0)
+							}
+							addrMap[addrstr] = append(addrMap[addrstr], prevTx)
 						}
 					}
 				}
@@ -96,14 +98,14 @@ func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]T
 }
 
 func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
-	c *dcrrpcclient.Client) map[string]*dcrutil.Tx {
+	c *dcrrpcclient.Client) map[string][]*dcrutil.Tx {
 	addrMap := make(map[string][]*dcrutil.Tx)
 
-	checkForOutpointAddr := func(blockTxs []*dcrutil.Tx) {
+	checkForAddrOut := func(blockTxs []*dcrutil.Tx) {
 		for _, tx := range blockTxs {
 			// Check the addresses associated with the PkScript of each TxOut
 			for _, txOut := range tx.MsgTx().TxOut {
-				_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
+				_, txOutAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
 					txOut.PkScript, activeChain)
 				if err != nil {
 					log.Infof("ExtractPkScriptAddrs: %v", err.Error())
@@ -111,17 +113,24 @@ func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
 				}
 
 				// Check if we are watching any address for this TxOut
-				var recvStrings []string
-				for _, txAddr := range txAddrs {
+				for _, txAddr := range txOutAddrs {
 					addrstr := txAddr.EncodeAddress()
-					if addrActn, ok := addrs[addrstr]; ok {
-						addrMap[addrstr] = tx
-						continue
+					if _, ok := addrs[addrstr]; ok {
+						if _, gotSlice := addrMap[addrstr]; !gotSlice {
+							addrMap[addrstr] = make([]*dcrutil.Tx, 0)
+						}
+						//log.Info("Receives to: ", addrstr)
+						addrMap[addrstr] = append(addrMap[addrstr], tx)
 					}
 				}
 			}
 		}
 	}
+
+	checkForAddrOut(block.Transactions())
+	checkForAddrOut(block.STransactions())
+
+	return addrMap
 }
 
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
@@ -133,14 +142,17 @@ type chainMonitor struct {
 	wg                 *sync.WaitGroup
 	noTicketPool       bool
 	watchaddrs         map[string]TxAction
-	spendTxBlockChan   chan map[string]*dcrutil.Tx
+	spendTxBlockChan   chan map[string][]*dcrutil.Tx
+	recvTxBlockChan    chan map[string][]*dcrutil.Tx
 }
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
 	blockConnChan chan *chainhash.Hash, savers []BlockDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool,
-	addrs map[string]TxAction, spendTxBlockChan chan map[string]*dcrutil.Tx) *chainMonitor {
+	addrs map[string]TxAction,
+	spendTxBlockChan chan map[string][]*dcrutil.Tx,
+	recvTxBlockChan chan map[string][]*dcrutil.Tx) *chainMonitor {
 	return &chainMonitor{
 		collector:          collector,
 		dataSavers:         savers,
@@ -150,6 +162,7 @@ func newChainMonitor(collector *blockDataCollector,
 		noTicketPool:       noPoolValue,
 		watchaddrs:         addrs,
 		spendTxBlockChan:   spendTxBlockChan,
+		recvTxBlockChan:    recvTxBlockChan,
 	}
 }
 
@@ -167,14 +180,20 @@ out:
 				break out
 			}
 			block, _ := p.collector.dcrdChainSvr.GetBlock(hash)
-			height := block.Height
+			height := block.Height()
 			daemonLog.Infof("Block height %v connected", height)
 
 			if len(p.watchaddrs) > 0 {
-				txsForAddrs := blockConsumesOutpointWithAddress(block, p.watchaddrs,
+				// txsForOutpoints := blockConsumesOutpointWithAddresses(block, p.watchaddrs,
+				// 	p.collector.dcrdChainSvr)
+				// if len(txsForOutpoints) > 0 {
+				// 	p.spendTxBlockChan <- txsForOutpoints
+				// }
+
+				txsForAddrs := blockReceivesToAddresses(block, p.watchaddrs,
 					p.collector.dcrdChainSvr)
 				if len(txsForAddrs) > 0 {
-					p.spendTxBlockChan <- txsForAddrs
+					p.recvTxBlockChan <- txsForAddrs
 				}
 			}
 

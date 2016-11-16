@@ -121,14 +121,15 @@ func mainCore() int {
 	}
 
 	// watchaddress
-	var recvTxChan, spendTxChan chan *dcrutil.Tx
-	var spendTxBlockChan chan map[string]*dcrutil.Tx
+	//var recvTxChan, spendTxChan chan *dcrutil.Tx
+	var spendTxBlockChan, recvTxBlockChan chan map[string][]*dcrutil.Tx
 	var relevantTxMempoolChan chan *dcrutil.Tx
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
-		recvTxChan = make(chan *dcrutil.Tx, recvTxChanBuffer)
-		//spendTxChan = make(chan *watchedAddrTx, sendTxChanBuffer)
-		spendTxBlockChan = make(chan map[string]*dcrutil.Tx, 100)
-		relevantTxMempoolChan = make(chan *dcrutil.Tx, relevantMempoolTxChanBuffer)
+		//recvTxChan = make(chan *dcrutil.Tx, recvTxChanBuffer)
+		//spendTxChan = make(chan *dcrutil.Tx, sendTxChanBuffer)
+		recvTxBlockChan = make(chan map[string][]*dcrutil.Tx, 100)
+		spendTxBlockChan = make(chan map[string][]*dcrutil.Tx, 100)
+		relevantTxMempoolChan = make(chan *dcrutil.Tx, 100)
 	}
 
 	// Like connectChan for block data, connectChanStkInf is used when a new
@@ -340,10 +341,14 @@ func mainCore() int {
 			addrMap[a] = emailActn
 		}
 		if len(addresses) == 0 {
-			if recvTxChan != nil {
-				close(recvTxChan)
-				recvTxChan = nil
+			if relevantTxMempoolChan != nil {
+				close(relevantTxMempoolChan)
+				relevantTxMempoolChan = nil
 			}
+			// if recvTxChan != nil {
+			// 	close(recvTxChan)
+			// 	recvTxChan = nil
+			// }
 		}
 	}
 
@@ -529,7 +534,7 @@ func mainCore() int {
 		// If collector is nil, so is connectChan
 		wsChainMonitor := newChainMonitor(collector, connectChan,
 			blockDataSavers, quit, &wg, !cfg.PoolValue,
-			addrMap, spendTxBlockChan)
+			addrMap, spendTxBlockChan, recvTxBlockChan)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -610,29 +615,15 @@ func mainCore() int {
 
 	// No addresses is implied if NoMonitor is true.
 	if len(addresses) > 0 {
-		wg.Add(2)
+		wg.Add(1)
 		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
-			recvTxChan, &wg, quit)
+			relevantTxMempoolChan, &wg, quit, recvTxBlockChan)
+		//wg.Add(1)
 		//go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 
 	// stakediff not implemented yet as the notifier appears broken
-	go func() {
-		for {
-			select {
-			case s, ok := <-stakeDiffChan:
-				if !ok {
-					log.Debugf("Stake difficulty channel closed")
-					return
-				}
-				log.Debugf("Got stake difficulty change notification (%v). "+
-					" Doing nothing for now.", s)
-			case <-quit:
-				log.Debugf("Quitting OnStakeDifficulty handler.")
-				return
-			}
-		}
-	}()
+	go stakeDiffHandler(stakeDiffChan, quit)
 
 	log.Infof("RPC client(s) successfully connected. Now monitoring and " +
 		"collecting data.")
@@ -656,22 +647,35 @@ func mainCore() int {
 	if connectChanStkInf != nil {
 		close(connectChanStkInf)
 	}
+
 	if newTxChan != nil {
 		txTicker.Stop()
 		close(newTxChan)
 	}
-
-	if recvTxChan != nil {
-		close(recvTxChan)
-	}
-	if spendTxChan != nil {
-		close(spendTxChan)
+	if relevantTxMempoolChan != nil {
+		close(relevantTxMempoolChan)
 	}
 
-	log.Infof("Closing connection to dcrd.")
-	dcrdClient.Shutdown()
+	// if recvTxChan != nil {
+	// 	close(recvTxChan)
+	// }
+	// if spendTxChan != nil {
+	// 	close(spendTxChan)
+	// }
 
-	if !cfg.NoCollectStakeInfo {
+	if spendTxBlockChan != nil {
+		close(spendTxBlockChan)
+	}
+	if recvTxBlockChan != nil {
+		close(recvTxBlockChan)
+	}
+
+	if dcrdClient != nil {
+		log.Infof("Closing connection to dcrd.")
+		dcrdClient.Shutdown()
+	}
+
+	if !cfg.NoCollectStakeInfo && dcrwClient != nil {
 		log.Infof("Closing connection to dcrwallet.")
 		dcrwClient.Shutdown()
 	}
@@ -710,6 +714,23 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 		default:
 			// Take a break from scanning
 			time.Sleep(time.Millisecond * 50)
+		}
+	}
+}
+
+func stakeDiffHandler(stakeDiffChan chan int64, quit chan struct{}) {
+	for {
+		select {
+		case s, ok := <-stakeDiffChan:
+			if !ok {
+				log.Debugf("Stake difficulty channel closed")
+				return
+			}
+			log.Debugf("Got stake difficulty change notification (%v). "+
+				" Doing nothing for now.", s)
+		case <-quit:
+			log.Debugf("Quitting OnStakeDifficulty handler.")
+			return
 		}
 	}
 }

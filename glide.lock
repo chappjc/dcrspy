@@ -1,5 +1,5 @@
 hash: b2e90c11432da59cb9c5531b41e8ba594c98987df3b62a5bfbd9e468271cba74
-updated: 2016-11-13T18:05:33.431657539-08:00
+updated: 2016-11-15T21:06:22.868754557-08:00
 imports:
 - name: github.com/btcsuite/btclog
   version: 73889fb79bd687870312b6e40effcecffbd57d30
@@ -22,9 +22,11 @@ imports:
 - name: github.com/decred/blake256
   version: a840e32d7c31fe2e0218607334cb120a683951a4
 - name: github.com/decred/dcrd
-  version: cf7fbc0406dd97f3e112c854fa4052a60a1c58b7
+  version: 0aa33e0fbd01ab4ac5757d294ef98cce50df2c4a
   subpackages:
   - blockchain
+  - blockchain/internal/dbnamespace
+  - blockchain/internal/progresslog
   - blockchain/stake
   - blockchain/stake/internal/dbnamespace
   - blockchain/stake/internal/ticketdb
@@ -43,13 +45,15 @@ imports:
 - name: github.com/decred/dcrrpcclient
   version: fc4826bb281f5b68af4cf95c20d8664419b4cc08
 - name: github.com/decred/dcrutil
-  version: 0484582bf5503574d824f110e836a8c48aa60c8c
+  version: 35388c4da60f031cb34909b9bf61f988475d864c
   subpackages:
   - base58
 - name: github.com/decred/dcrwallet
-  version: 1160e7671c476b23a1fa89f0dac19b295dd7c2b2
+  version: 71b375db11523106aa6f5f675d1940a44aeae73c
   subpackages:
   - netparams
+  - walletdb
+  - wtxmgr
 - name: github.com/decred/ed25519
   version: b0909d3f798b97a03c9e77023f97a5301a2a7900
   subpackages:
