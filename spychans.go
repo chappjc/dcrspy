@@ -10,13 +10,17 @@ import (
 const (
 	// blockConnChanBuffer is the size of the block connected channel buffer.
 	blockConnChanBuffer = 8
+
 	// newTxChanBuffer is the size of the new transaction channel buffer, for
-	// any transactions are added into mempool.
+	// ANY transactions are added into mempool.
 	newTxChanBuffer = 2000
 
+	// relevantMempoolTxChanBuffer is the size of the new transaction channel
+	// buffer, for relevant transactions that are added into mempool.
 	relevantMempoolTxChanBuffer = 512
 )
 
+// Channels are package-level variables for simplicity
 var spyChans struct {
 	txTicker *time.Ticker
 

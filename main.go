@@ -21,7 +21,6 @@ import (
 	"bufio"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"os/signal"
@@ -164,6 +163,12 @@ func mainCore() int {
 	// 	os.Exit(1)
 	// }
 
+	if err := dcrdClient.NotifyWinningTickets(); err != nil {
+		fmt.Printf("Failed to register daemon RPC client for  "+
+			"winning tickets notifications: %s\n", err.Error())
+		os.Exit(1)
+	}
+
 	// Register a Tx filter for addresses (receiving).  The filter applies to
 	// OnRelevantTxAccepted.
 	// TODO: register outpoints (third argument).
@@ -178,38 +183,7 @@ func mainCore() int {
 
 	var dcrwClient *dcrrpcclient.Client
 	if !cfg.NoCollectStakeInfo {
-		// dcrwallet rpc.cert
-		var dcrwCerts []byte
-		if !cfg.DisableClientTLS {
-			dcrwCerts, err = ioutil.ReadFile(cfg.DcrwCert)
-			if err != nil {
-				log.Errorf("Failed to read dcrwallet cert file at %s: %s\n",
-					cfg.DcrwCert, err.Error())
-				// but try anyway?
-			}
-		}
-
-		log.Debugf("Attempting to connect to dcrwallet RPC %s as user %s "+
-			"using certificate located in %s",
-			cfg.DcrwServ, cfg.DcrwUser, cfg.DcrwCert)
-
-		connCfgWallet := &dcrrpcclient.ConnConfig{
-			Host:         cfg.DcrwServ,
-			Endpoint:     "ws",
-			User:         cfg.DcrwUser,
-			Pass:         cfg.DcrwPass,
-			Certificates: dcrwCerts,
-			DisableTLS:   cfg.DisableClientTLS,
-		}
-
-		dcrwClient, err = dcrrpcclient.New(connCfgWallet, nil)
-		if err != nil {
-			fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
-				" wanted to start with --nostakeinfo?\n", err.Error())
-			fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v",
-				cfg.DcrwCert)
-			return 8
-		}
+		dcrwClient, err = connectWalletRPC(cfg)
 	}
 
 	// Ctrl-C to shut down.
@@ -512,40 +486,6 @@ func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
 	}
 
 	return
-}
-
-func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, error) {
-	var dcrdCerts []byte
-	var err error
-	if !cfg.DisableClientTLS {
-		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
-		if err != nil {
-			fmt.Printf("Failed to read dcrd cert file at %s: %s\n",
-				cfg.DcrdCert, err.Error())
-			return nil, err
-		}
-	}
-
-	log.Debugf("Attempting to connect to dcrd RPC %s as user %s "+
-		"using certificate located in %s",
-		cfg.DcrdServ, cfg.DcrdUser, cfg.DcrdCert)
-
-	connCfgDaemon := &dcrrpcclient.ConnConfig{
-		Host:         cfg.DcrdServ,
-		Endpoint:     "ws", // websocket
-		User:         cfg.DcrdUser,
-		Pass:         cfg.DcrdPass,
-		Certificates: dcrdCerts,
-		DisableTLS:   cfg.DisableClientTLS,
-	}
-
-	ntfnHandlers := getNtfnHandlers(cfg)
-	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, ntfnHandlers)
-	if err != nil {
-		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
-		return nil, err
-	}
-	return dcrdClient, nil
 }
 
 func main() {

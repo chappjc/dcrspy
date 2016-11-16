@@ -19,7 +19,7 @@ import (
 // cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
 
 // Define notification handlers
-func getNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
+func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 	return &dcrrpcclient.NotificationHandlers{
 		OnBlockConnected: func(blockHeaderSerialized []byte, transactions [][]byte) {
 			// OnBlockConnected: func(hash *chainhash.Hash, height int32,
@@ -99,6 +99,11 @@ func getNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 		// TODO
 		OnWinningTickets: func(blockHash *chainhash.Hash, blockHeight int64,
 			tickets []*chainhash.Hash) {
+			var txstr []string
+			for _, t := range tickets {
+				txstr = append(txstr, t.String())
+			}
+			log.Debugf("Winning tickets: %v", strings.Join(txstr, ", "))
 		},
 		// maturing tickets
 		// BUG: dcrrpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
@@ -142,5 +147,13 @@ func getNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 		//txDetails.Hex
 		//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
 		//},
+	}
+}
+
+func getWalletNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
+	return &dcrrpcclient.NotificationHandlers{
+		OnAccountBalance: func(account string, balance dcrutil.Amount, confirmed bool) {
+			log.Info("OnAccountBalance")
+		},
 	}
 }

@@ -13,9 +13,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
-	//"github.com/decred/dcrd/dcrjson"
-	//"github.com/decred/dcrutil"
 )
 
 type fileSaver struct {
@@ -359,20 +358,26 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 
 	fmt.Println("- Balances (by account)")
 	for acct, balances := range *data.accountBalances {
-		fmt.Printf("\tBalances (%s): \t %10.4f (any), %10.4f (spendable), %10.4f (locked)\n",
-			acct, balances["all"].ToCoin(), balances["spendable"].ToCoin(),
+		padWidth := len("imported") - len(acct) + 5
+		if padWidth < 0 {
+			padWidth = 0
+		}
+		padding := strings.Repeat(" ", padWidth)
+		fmt.Printf("\tBalances (%s):%s%12.4f (any),%12.4f (spendable),%12.4f (locked)\n",
+			acct, padding,
+			balances["all"].ToCoin(), balances["spendable"].ToCoin(),
 			balances["locked"].ToCoin())
 	}
 
 	fmt.Println("- Balances (by type)")
-	fmt.Printf("\tBalances (spendable):  %9.4f (default), %9.4f (all)\n",
+	fmt.Printf("\tBalances (spendable):%12.4f (default),%12.4f (all)\n",
 		data.balances.SpendableDefaultAccount,
 		data.balances.SpendableAllAccounts)
-	fmt.Printf("\tBalances (locked):     %9.4f (default), %9.4f (all), %9.4f (imported)\n",
+	fmt.Printf("\tBalances (locked):   %12.4f (default),%12.4f (all),%12.4f (imported)\n",
 		data.balances.LockedDefaultAccount,
 		data.balances.LockedAllAccounts,
 		data.balances.LockedImportedAccount)
-	fmt.Printf("\tBalances (any):        %9.4f (default), %9.4f (all)\n",
+	fmt.Printf("\tBalances (any):      %12.4f (default),%12.4f (all)\n",
 		data.balances.AllDefaultAcount, data.balances.AllAllAcounts)
 
 	fmt.Println("- Stake Info")

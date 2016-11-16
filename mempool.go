@@ -707,39 +707,3 @@ func JSONFormatMempoolData(data *mempoolData) (*bytes.Buffer, error) {
 
 	return &jsonAllIndented, err
 }
-
-// MedianAmount gets the median Amount from a slice of Amounts
-func MedianAmount(s []dcrutil.Amount) dcrutil.Amount {
-	if len(s) == 0 {
-		return 0
-	}
-
-	sort.Sort(dcrutil.AmountSorter(s))
-
-	middle := len(s) / 2
-
-	if len(s) == 0 {
-		return 0
-	} else if (len(s) % 2) != 0 {
-		return s[middle]
-	}
-	return (s[middle] + s[middle-1]) / 2
-}
-
-// MedianCoin gets the median DCR from a slice of float64s
-func MedianCoin(s []float64) float64 {
-	if len(s) == 0 {
-		return 0
-	}
-
-	sort.Float64s(s)
-
-	middle := len(s) / 2
-
-	if len(s) == 0 {
-		return 0
-	} else if (len(s) % 2) != 0 {
-		return s[middle]
-	}
-	return (s[middle] + s[middle-1]) / 2
-}
