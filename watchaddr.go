@@ -93,16 +93,15 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 // strings with bool values indicating if email should be sent in response to
 // transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
-	emailConf *emailConfig,
-	relevantTxMempoolChan <-chan *dcrutil.Tx, wg *sync.WaitGroup,
-	quit <-chan struct{}, recvTxBlockChan chan map[string][]*dcrutil.Tx) {
+	emailConf *emailConfig, wg *sync.WaitGroup,
+	quit <-chan struct{}) {
 	defer wg.Done()
 	//out:
 	for {
 	receive:
 		select {
 		// The message with all tx for watched addresses in new block
-		case txsByAddr, ok := <-recvTxBlockChan:
+		case txsByAddr, ok := <-spyChans.recvTxBlockChan:
 			// map[string][]*dcrutil.Tx is a map of addresses to slices of
 			// transactions using that address.
 			if !ok {
@@ -158,8 +157,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 							}
 							if addrActn, ok := addrs[addr]; ok {
 								recvString := fmt.Sprintf(
-									"Transaction with watched address %v as outpoint "+
-										"(receiving), value %.6f, %v.",
+									"Transaction sending to %v, value %.6f, %v",
 									addr, dcrutil.Amount(txOut.Value).ToCoin(),
 									action)
 								log.Infof(recvString)
@@ -178,7 +176,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
 			}
 
-		case tx, ok := <-relevantTxMempoolChan:
+		case tx, ok := <-spyChans.relevantTxMempoolChan:
 			if !ok {
 				log.Infof("Receive-Tx watch channel closed")
 				return
@@ -212,8 +210,8 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 					addrstr := txAddr.EncodeAddress()
 					if addrActn, ok := addrs[addrstr]; ok {
 						recvString := fmt.Sprintf(
-							"Transaction with watched address %v as outpoint "+
-								"(receiving), value %.6f, %v, before block %d\n",
+							"Transaction sending to %v, value %.6f, %v"+
+								", after block %d",
 							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
 							action, height)
 						log.Infof(recvString)
@@ -238,6 +236,8 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	}
 
 }
+
+// handleSendingTx is DEAD
 
 // Rather than watching for the sending address, which isn't known ahead of
 // time, watch for a transaction with an input (source) whos previous outpoint
@@ -333,4 +333,9 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 			return
 		}
 	}
+}
+
+type watchedAddrTx struct {
+	transaction *dcrutil.Tx
+	details     *int
 }

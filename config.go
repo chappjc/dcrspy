@@ -18,7 +18,6 @@ import (
 	"github.com/decred/dcrd/chaincfg"
 	"github.com/decred/dcrutil"
 	"github.com/decred/dcrwallet/netparams"
-	//"github.com/decred/dcrd/dcrjson"
 )
 
 const (
@@ -383,6 +382,14 @@ func loadConfig() (*config, error) {
 
 	log.Debugf("Output folder: %v", cfg.OutFolder)
 	log.Debugf("Log folder: %v", cfg.LogDir)
+
+	// mempool: new transactions, new tickets
+	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
+	if cfg.MonitorMempool && cfg.NoMonitor {
+		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified. " +
+			"Not monitoring mempool.")
+		cfg.MonitorMempool = false
+	}
 
 	return &cfg, nil
 }

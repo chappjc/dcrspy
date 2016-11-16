@@ -19,13 +19,11 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
 	"os"
-	"os/exec"
 	"os/signal"
 	"strconv"
 	"strings"
@@ -33,33 +31,11 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	// "github.com/decred/dcrd/dcrjson"
-	"github.com/decred/dcrd/wire"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
-	"github.com/decred/dcrwallet/wtxmgr"
 )
 
-type watchedAddrTx struct {
-	transaction *dcrutil.Tx
-	details     *int //*dcrjson.BlockDetails
-}
-
 const (
-	// blockConnChanBuffer is the size of the block connected channel buffer.
-	blockConnChanBuffer = 8
-	// newTxChanBuffer is the size of the new transaction channel buffer, for
-	// any transactions are added into mempool.
-	newTxChanBuffer = 2000
-	// recvTxChanBuffer is the size of the receive transaction channel buffer,
-	// for transactions sending to a registered address.
-	recvTxChanBuffer = 1280
-	// sendTxChanBuffer is the size of the send transaction channel buffer,
-	// for transactions redeeming funds associated with a registered address.
-	sendTxChanBuffer = 128
-
-	relevantMempoolTxChanBuffer = 1280
-
 	spyart = `
                        __                          
                   ____/ /__________________  __  __
@@ -86,8 +62,7 @@ func mainCore() int {
 	log.Infof(appName+" version %s%v", ver.String(), spyart)
 
 	// Create data output folder if it does not already exist
-	err = os.MkdirAll(cfg.OutFolder, 0750)
-	if err != nil {
+	if os.MkdirAll(cfg.OutFolder, 0750) != nil {
 		fmt.Printf("Failed to create data output folder %s. Error: %s\n",
 			cfg.OutFolder, err.Error())
 		return 2
@@ -95,208 +70,10 @@ func mainCore() int {
 
 	// Connect to dcrd RPC server using websockets. Set up the
 	// notification handler to deliver blocks through a channel.
-	var connectChan chan *chainhash.Hash
-	var stakeDiffChan chan int64
-	// If we're monitoring for blocks OR collecting block data, these channels
-	// are necessary to handle new block notifications. Otherwise, leave them
-	// as nil so that both a send (below) blocks and a receive (in spy.go,
-	// blockConnectedHandler) block. default case makes non-blocking below.
-	// quit channel case manages blockConnectedHandlers.
-	if !cfg.NoCollectBlockData && !cfg.NoMonitor {
-		connectChan = make(chan *chainhash.Hash, blockConnChanBuffer)
-		stakeDiffChan = make(chan int64, 2)
-	}
-
-	// mempool: new transactions, new tickets
-	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
-	if cfg.MonitorMempool && cfg.NoMonitor {
-		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified. " +
-			"Not monitoring mempool.")
-		cfg.MonitorMempool = false
-	}
-
-	var newTxChan chan *chainhash.Hash
-	if cfg.MonitorMempool {
-		newTxChan = make(chan *chainhash.Hash, newTxChanBuffer)
-	}
-
-	// watchaddress
-	//var recvTxChan, spendTxChan chan *dcrutil.Tx
-	var spendTxBlockChan, recvTxBlockChan chan map[string][]*dcrutil.Tx
-	var relevantTxMempoolChan chan *dcrutil.Tx
-	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
-		//recvTxChan = make(chan *dcrutil.Tx, recvTxChanBuffer)
-		//spendTxChan = make(chan *dcrutil.Tx, sendTxChanBuffer)
-		recvTxBlockChan = make(chan map[string][]*dcrutil.Tx, 100)
-		spendTxBlockChan = make(chan map[string][]*dcrutil.Tx, 100)
-		relevantTxMempoolChan = make(chan *dcrutil.Tx, 100)
-	}
-
-	// Like connectChan for block data, connectChanStkInf is used when a new
-	// block is connected, but to signal the stake info monitor.
-	var connectChanStkInf chan int32
-	if !cfg.NoCollectStakeInfo && !cfg.NoMonitor {
-		connectChanStkInf = make(chan int32, blockConnChanBuffer)
-	}
-
-	// Arbitrary command execution
-	cmdName := cfg.CmdName // e.g. "ping"
-	args := cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
-
-	ntfnHandlersDaemon := dcrrpcclient.NotificationHandlers{
-		OnBlockConnected: func(blockHeaderSerialized []byte, transactions [][]byte) {
-			// OnBlockConnected: func(hash *chainhash.Hash, height int32,
-			// 	time time.Time, vb uint16) {
-			blockHeader := new(wire.BlockHeader)
-			err := blockHeader.FromBytes(blockHeaderSerialized)
-			if err != nil {
-				log.Error("Failed to serialize blockHeader in new block notification.")
-			}
-			height := int32(blockHeader.Height)
-			hash := blockHeader.BlockSha()
-			select {
-			case connectChan <- &hash:
-				// Past this point in this case is command execution. Block
-				// height was sent on connectChan, so move on if no command.
-				if len(cmdName) == 0 {
-					break
-				}
-
-				// replace %h and %n with hash and block height, resp.
-				rep := strings.NewReplacer("%h", hash.String(), "%n",
-					strconv.Itoa(int(height)))
-				var argSubst bytes.Buffer
-				rep.WriteString(&argSubst, args)
-
-				// Split the argument string by comma
-				argsSplit := strings.Split(argSubst.String(), ",")
-
-				// Create command, with substituted args
-				cmd := exec.Command(cmdName, argsSplit...)
-				// Get a pipe for stdout
-				outpipe, err := cmd.StdoutPipe()
-				if err != nil {
-					log.Critical(err)
-				}
-				// Send stderr to the same place
-				cmd.Stderr = cmd.Stdout
-
-				// Display the full command being executed
-				execLog.Infof("Full command line to be executed: %s %s",
-					cmd.Path, strings.Join(argsSplit, " "))
-
-				// Channel for logger and command execution routines to talk
-				cmdDone := make(chan error)
-				go execLogger(outpipe, cmdDone)
-
-				// Start command and return from handler without waiting
-				go func() {
-					if err := cmd.Run(); err != nil {
-						execLog.Errorf("Failed to start system command %v. Error: %v",
-							cmdName, err)
-					}
-					// Signal the logger goroutine, and clean up
-					cmdDone <- err
-					close(cmdDone)
-				}()
-			// send to nil channel blocks
-			default:
-			}
-
-			// Also send on stake info channel, if enabled.
-			select {
-			case connectChanStkInf <- height:
-			// send to nil channel blocks
-			default:
-			}
-		},
-		// Not too useful since this notifies on every block
-		OnStakeDifficulty: func(hash *chainhash.Hash, height int64,
-			stakeDiff int64) {
-			select {
-			case stakeDiffChan <- stakeDiff:
-			default:
-			}
-		},
-		// TODO
-		OnWinningTickets: func(blockHash *chainhash.Hash, blockHeight int64,
-			tickets []*chainhash.Hash) {
-		},
-		// maturing tickets
-		// BUG: dcrrpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
-		// Unmarshal fourth parameter as a map[hash]hash.
-		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
-			tickets map[chainhash.Hash]chainhash.Hash) {
-			for _, tick := range tickets {
-				log.Debugf("Mined new ticket: %v", tick.String())
-			}
-		},
-		// OnRelevantTxAccepted is invoked when a transaction containing a
-		// registered address is inserted into mempool.
-		OnRelevantTxAccepted: func(transaction []byte) {
-			rec, err := wtxmgr.NewTxRecord(transaction, time.Now())
-			if err != nil {
-				return
-			}
-			tx := dcrutil.NewTx(&rec.MsgTx)
-			txHash := rec.Hash
-			select {
-			case relevantTxMempoolChan <- tx:
-				log.Infof("Detected transaction %v in mempool containing registered address.",
-					txHash.String())
-			default:
-			}
-		},
-		// OnTxAccepted is invoked when a transaction is accepted into the
-		// memory pool.  It will only be invoked if a preceding call to
-		// NotifyNewTransactions with the verbose flag set to false has been
-		// made to register for the notification and the function is non-nil.
-		OnTxAccepted: func(hash *chainhash.Hash, amount dcrutil.Amount) {
-			// Just send the tx hash and let the goroutine handle everything.
-			select {
-			case newTxChan <- hash:
-			default:
-			}
-			//log.Info("Transaction accepted to mempool: ", hash, amount)
-		},
-		// Note: dcrjson.TxRawResult is from getrawtransaction
-		//OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
-		//txDetails.Hex
-		//log.Info("Transaction accepted to mempool: ", txDetails.Txid)
-		//},
-	}
+	makeChans(cfg)
 
 	// Daemon client connection
-
-	// dcrd rpc.cert
-	var dcrdCerts []byte
-	if !cfg.DisableClientTLS {
-		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
-		if err != nil {
-			fmt.Printf("Failed to read dcrd cert file at %s: %s\n",
-				cfg.DcrdCert, err.Error())
-			return 3
-		}
-	}
-
-	log.Debugf("Attempting to connect to dcrd RPC %s as user %s "+
-		"using certificate located in %s",
-		cfg.DcrdServ, cfg.DcrdUser, cfg.DcrdCert)
-
-	connCfgDaemon := &dcrrpcclient.ConnConfig{
-		Host:         cfg.DcrdServ,
-		Endpoint:     "ws", // websocket
-		User:         cfg.DcrdUser,
-		Pass:         cfg.DcrdPass,
-		Certificates: dcrdCerts,
-		DisableTLS:   cfg.DisableClientTLS,
-	}
-
-	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, &ntfnHandlersDaemon)
-	if err != nil {
-		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
-		return 4
-	}
+	dcrdClient, err := connectNodeRPC(cfg)
 
 	// Display connected network
 	curnet, err := dcrdClient.GetCurrentNet()
@@ -341,9 +118,9 @@ func mainCore() int {
 			addrMap[a] = emailActn
 		}
 		if len(addresses) == 0 {
-			if relevantTxMempoolChan != nil {
-				close(relevantTxMempoolChan)
-				relevantTxMempoolChan = nil
+			if spyChans.relevantTxMempoolChan != nil {
+				close(spyChans.relevantTxMempoolChan)
+				spyChans.relevantTxMempoolChan = nil
 			}
 			// if recvTxChan != nil {
 			// 	close(recvTxChan)
@@ -532,9 +309,9 @@ func mainCore() int {
 		// Blockchain monitor for the collector
 		wg.Add(1)
 		// If collector is nil, so is connectChan
-		wsChainMonitor := newChainMonitor(collector, connectChan,
+		wsChainMonitor := newChainMonitor(collector,
 			blockDataSavers, quit, &wg, !cfg.PoolValue,
-			addrMap, spendTxBlockChan, recvTxBlockChan)
+			addrMap)
 		go wsChainMonitor.blockConnectedHandler()
 	}
 
@@ -569,13 +346,12 @@ func mainCore() int {
 		if !cfg.NoMonitor {
 			wg.Add(1)
 			// Stake info monitor for the stakeCollector
-			wsStakeInfoMonitor := newStakeMonitor(stakeCollector, connectChanStkInf,
+			wsStakeInfoMonitor := newStakeMonitor(stakeCollector,
 				stakeInfoDataSavers, quit, &wg)
 			go wsStakeInfoMonitor.blockConnectedHandler()
 		}
 	}
 
-	var txTicker *time.Ticker
 	if cfg.MonitorMempool {
 		mpoolCollector, err := newMempoolDataCollector(cfg, dcrdClient)
 		if err != nil {
@@ -601,14 +377,14 @@ func mainCore() int {
 		maxi := time.Duration(time.Duration(cfg.MempoolMaxInterval) * time.Second)
 
 		wg.Add(1)
-		mpm := newMempoolMonitor(mpoolCollector, newTxChan, mempoolSavers,
+		mpm := newMempoolMonitor(mpoolCollector, mempoolSavers,
 			quit, &wg, newTicketLimit, mini, maxi)
 		go mpm.txHandler(dcrdClient)
 
-		txTicker = time.NewTicker(time.Second * 2)
+		spyChans.txTicker = time.NewTicker(time.Second * 2)
 		go func() {
-			for range txTicker.C {
-				newTxChan <- new(chainhash.Hash)
+			for range spyChans.txTicker.C {
+				spyChans.newTxChan <- new(chainhash.Hash)
 			}
 		}()
 	}
@@ -617,13 +393,13 @@ func mainCore() int {
 	if len(addresses) > 0 {
 		wg.Add(1)
 		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
-			relevantTxMempoolChan, &wg, quit, recvTxBlockChan)
+			&wg, quit)
 		//wg.Add(1)
 		//go handleSendingTx(dcrdClient, addrMap, spendTxChan, &wg, quit)
 	}
 
 	// stakediff not implemented yet as the notifier appears broken
-	go stakeDiffHandler(stakeDiffChan, quit)
+	go stakeDiffHandler(quit)
 
 	log.Infof("RPC client(s) successfully connected. Now monitoring and " +
 		"collecting data.")
@@ -638,37 +414,7 @@ func mainCore() int {
 	}
 
 	// Closing these channels should be unnecessary if quit was handled right
-	if stakeDiffChan != nil {
-		close(stakeDiffChan)
-	}
-	if connectChan != nil {
-		close(connectChan)
-	}
-	if connectChanStkInf != nil {
-		close(connectChanStkInf)
-	}
-
-	if newTxChan != nil {
-		txTicker.Stop()
-		close(newTxChan)
-	}
-	if relevantTxMempoolChan != nil {
-		close(relevantTxMempoolChan)
-	}
-
-	// if recvTxChan != nil {
-	// 	close(recvTxChan)
-	// }
-	// if spendTxChan != nil {
-	// 	close(spendTxChan)
-	// }
-
-	if spendTxBlockChan != nil {
-		close(spendTxBlockChan)
-	}
-	if recvTxBlockChan != nil {
-		close(recvTxBlockChan)
-	}
+	closeChans()
 
 	if dcrdClient != nil {
 		log.Infof("Closing connection to dcrd.")
@@ -718,10 +464,10 @@ func execLogger(outpipe io.Reader, cmdDone <-chan error) {
 	}
 }
 
-func stakeDiffHandler(stakeDiffChan chan int64, quit chan struct{}) {
+func stakeDiffHandler(quit chan struct{}) {
 	for {
 		select {
-		case s, ok := <-stakeDiffChan:
+		case s, ok := <-spyChans.stakeDiffChan:
 			if !ok {
 				log.Debugf("Stake difficulty channel closed")
 				return
@@ -766,6 +512,40 @@ func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
 	}
 
 	return
+}
+
+func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, error) {
+	var dcrdCerts []byte
+	var err error
+	if !cfg.DisableClientTLS {
+		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
+		if err != nil {
+			fmt.Printf("Failed to read dcrd cert file at %s: %s\n",
+				cfg.DcrdCert, err.Error())
+			return nil, err
+		}
+	}
+
+	log.Debugf("Attempting to connect to dcrd RPC %s as user %s "+
+		"using certificate located in %s",
+		cfg.DcrdServ, cfg.DcrdUser, cfg.DcrdCert)
+
+	connCfgDaemon := &dcrrpcclient.ConnConfig{
+		Host:         cfg.DcrdServ,
+		Endpoint:     "ws", // websocket
+		User:         cfg.DcrdUser,
+		Pass:         cfg.DcrdPass,
+		Certificates: dcrdCerts,
+		DisableTLS:   cfg.DisableClientTLS,
+	}
+
+	ntfnHandlers := getNtfnHandlers(cfg)
+	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, ntfnHandlers)
+	if err != nil {
+		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
+		return nil, err
+	}
+	return dcrdClient, nil
 }
 
 func main() {

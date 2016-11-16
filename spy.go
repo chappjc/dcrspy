@@ -135,34 +135,26 @@ func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
 
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
 type chainMonitor struct {
-	collector          *blockDataCollector
-	dataSavers         []BlockDataSaver
-	blockConnectedChan chan *chainhash.Hash
-	quit               chan struct{}
-	wg                 *sync.WaitGroup
-	noTicketPool       bool
-	watchaddrs         map[string]TxAction
-	spendTxBlockChan   chan map[string][]*dcrutil.Tx
-	recvTxBlockChan    chan map[string][]*dcrutil.Tx
+	collector    *blockDataCollector
+	dataSavers   []BlockDataSaver
+	quit         chan struct{}
+	wg           *sync.WaitGroup
+	noTicketPool bool
+	watchaddrs   map[string]TxAction
 }
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
-	blockConnChan chan *chainhash.Hash, savers []BlockDataSaver,
+	savers []BlockDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool,
-	addrs map[string]TxAction,
-	spendTxBlockChan chan map[string][]*dcrutil.Tx,
-	recvTxBlockChan chan map[string][]*dcrutil.Tx) *chainMonitor {
+	addrs map[string]TxAction) *chainMonitor {
 	return &chainMonitor{
-		collector:          collector,
-		dataSavers:         savers,
-		blockConnectedChan: blockConnChan,
-		quit:               quit,
-		wg:                 wg,
-		noTicketPool:       noPoolValue,
-		watchaddrs:         addrs,
-		spendTxBlockChan:   spendTxBlockChan,
-		recvTxBlockChan:    recvTxBlockChan,
+		collector:    collector,
+		dataSavers:   savers,
+		quit:         quit,
+		wg:           wg,
+		noTicketPool: noPoolValue,
+		watchaddrs:   addrs,
 	}
 }
 
@@ -174,7 +166,7 @@ out:
 	for {
 	keepon:
 		select {
-		case hash, ok := <-p.blockConnectedChan:
+		case hash, ok := <-spyChans.connectChan:
 			if !ok {
 				log.Warnf("Block connected channel closed.")
 				break out
@@ -193,7 +185,7 @@ out:
 				txsForAddrs := blockReceivesToAddresses(block, p.watchaddrs,
 					p.collector.dcrdChainSvr)
 				if len(txsForAddrs) > 0 {
-					p.recvTxBlockChan <- txsForAddrs
+					spyChans.recvTxBlockChan <- txsForAddrs
 				}
 			}
 
@@ -241,23 +233,21 @@ out:
 
 // for getstakeinfo, etc.
 type stakeMonitor struct {
-	collector          *stakeInfoDataCollector
-	dataSavers         []StakeInfoDataSaver
-	blockConnectedChan chan int32
-	quit               chan struct{}
-	wg                 *sync.WaitGroup
+	collector  *stakeInfoDataCollector
+	dataSavers []StakeInfoDataSaver
+	quit       chan struct{}
+	wg         *sync.WaitGroup
 }
 
 // newStakeMonitor creates a new stakeMonitor
 func newStakeMonitor(collector *stakeInfoDataCollector,
-	blockConnChan chan int32, savers []StakeInfoDataSaver,
+	savers []StakeInfoDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup) *stakeMonitor {
 	return &stakeMonitor{
-		collector:          collector,
-		dataSavers:         savers,
-		blockConnectedChan: blockConnChan,
-		quit:               quit,
-		wg:                 wg,
+		collector:  collector,
+		dataSavers: savers,
+		quit:       quit,
+		wg:         wg,
 	}
 }
 
@@ -268,7 +258,7 @@ func (p *stakeMonitor) blockConnectedHandler() {
 out:
 	for {
 		select {
-		case height, ok := <-p.blockConnectedChan:
+		case height, ok := <-spyChans.connectChanStkInf:
 			if !ok {
 				log.Warnf("Block connected channel closed.")
 				break out
