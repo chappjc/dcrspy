@@ -60,7 +60,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 				cmd.Stderr = cmd.Stdout
 
 				// Display the full command being executed
-				execLog.Infof("Full command line to be executed: %s %s",
+				execLog.Debugf("Full command line to be executed: %s %s",
 					cmd.Path, strings.Join(argsSplit, " "))
 
 				// Channel for logger and command execution routines to talk
@@ -125,7 +125,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 			txHash := rec.Hash
 			select {
 			case spyChans.relevantTxMempoolChan <- tx:
-				log.Infof("Detected transaction %v in mempool containing registered address.",
+				log.Debugf("Detected transaction %v in mempool containing registered address.",
 					txHash.String())
 			default:
 			}
@@ -153,7 +153,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 func getWalletNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 	return &dcrrpcclient.NotificationHandlers{
 		OnAccountBalance: func(account string, balance dcrutil.Amount, confirmed bool) {
-			log.Info("OnAccountBalance")
+			log.Debug("OnAccountBalance")
 		},
 	}
 }
