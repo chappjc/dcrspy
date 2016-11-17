@@ -121,10 +121,6 @@ func mainCore() int {
 				close(spyChans.relevantTxMempoolChan)
 				spyChans.relevantTxMempoolChan = nil
 			}
-			// if recvTxChan != nil {
-			// 	close(recvTxChan)
-			// 	recvTxChan = nil
-			// }
 		}
 	}
 
