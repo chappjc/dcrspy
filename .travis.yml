@@ -14,4 +14,4 @@ install:
   - go get -v github.com/golang/lint/golint
 script:
   - export PATH=$PATH:$GOPATH/bin
-  - go install ./...
+  - go install $(glide nv)
