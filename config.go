@@ -82,7 +82,8 @@ type config struct {
 	NoCollectStakeInfo bool `long:"nostakeinfo" description:"Do not collect stake info data (default false)"`
 	PoolValue          bool `short:"p" long:"poolvalue" description:"Collect ticket pool value information (8-9 sec)."`
 
-	WatchAddresses []string `short:"w" long:"watchaddress" description:"Decred address for which to watch for incoming transactions. One per line."`
+	WatchAddresses []string `short:"w" long:"watchaddress" description:"Watched address (receiving). One per line."`
+	//WatchOutpoints []string `short:"o" long:"watchout" description:"Watched outpoint (sending). One per line."`
 
 	SMTPUser   string `long:"smtpuser" description:"SMTP user name"`
 	SMTPPass   string `long:"smtppass" description:"SMTP password"`
@@ -381,6 +382,14 @@ func loadConfig() (*config, error) {
 
 	log.Debugf("Output folder: %v", cfg.OutFolder)
 	log.Debugf("Log folder: %v", cfg.LogDir)
+
+	// mempool: new transactions, new tickets
+	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
+	if cfg.MonitorMempool && cfg.NoMonitor {
+		log.Warn("Both --nomonitor (-e) and --mempool (-m) specified. " +
+			"Not monitoring mempool.")
+		cfg.MonitorMempool = false
+	}
 
 	return &cfg, nil
 }

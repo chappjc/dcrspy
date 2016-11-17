@@ -35,7 +35,6 @@ type mempoolMonitor struct {
 	maxInterval    time.Duration
 	collector      *mempoolDataCollector
 	dataSavers     []MempoolDataSaver
-	newTxChan      <-chan *chainhash.Hash
 	quit           chan struct{}
 	wg             *sync.WaitGroup
 	mtx            sync.RWMutex
@@ -43,7 +42,7 @@ type mempoolMonitor struct {
 
 // newMempoolMonitor creates a new mempoolMonitor
 func newMempoolMonitor(collector *mempoolDataCollector,
-	txChan <-chan *chainhash.Hash, savers []MempoolDataSaver,
+	savers []MempoolDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup, newTicketLimit int32,
 	mini time.Duration, maxi time.Duration) *mempoolMonitor {
 	return &mempoolMonitor{
@@ -53,7 +52,6 @@ func newMempoolMonitor(collector *mempoolDataCollector,
 		maxInterval:    maxi,
 		collector:      collector,
 		dataSavers:     savers,
-		newTxChan:      txChan,
 		quit:           quit,
 		wg:             wg,
 	}
@@ -69,7 +67,7 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 	defer p.wg.Done()
 	for {
 		select {
-		case s, ok := <-p.newTxChan:
+		case s, ok := <-spyChans.newTxChan:
 			if !ok {
 				mempoolLog.Infof("New Tx channel closed")
 				return
@@ -708,40 +706,4 @@ func JSONFormatMempoolData(data *mempoolData) (*bytes.Buffer, error) {
 	}
 
 	return &jsonAllIndented, err
-}
-
-// MedianAmount gets the median Amount from a slice of Amounts
-func MedianAmount(s []dcrutil.Amount) dcrutil.Amount {
-	if len(s) == 0 {
-		return 0
-	}
-
-	sort.Sort(dcrutil.AmountSorter(s))
-
-	middle := len(s) / 2
-
-	if len(s) == 0 {
-		return 0
-	} else if (len(s) % 2) != 0 {
-		return s[middle]
-	}
-	return (s[middle] + s[middle-1]) / 2
-}
-
-// MedianCoin gets the median DCR from a slice of float64s
-func MedianCoin(s []float64) float64 {
-	if len(s) == 0 {
-		return 0
-	}
-
-	sort.Float64s(s)
-
-	middle := len(s) / 2
-
-	if len(s) == 0 {
-		return 0
-	} else if (len(s) % 2) != 0 {
-		return s[middle]
-	}
-	return (s[middle] + s[middle-1]) / 2
 }

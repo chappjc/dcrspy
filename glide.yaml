@@ -12,6 +12,7 @@ import:
 - package: github.com/btcsuite/websocket
 - package: github.com/decred/blake256
 - package: github.com/decred/dcrd
+  version: master
   subpackages:
   - blockchain
   - blockchain/stake
@@ -26,6 +27,7 @@ import:
   - txscript
   - wire
 - package: github.com/decred/dcrrpcclient
+  version: master
 - package: github.com/decred/dcrutil
   subpackages:
   - base58

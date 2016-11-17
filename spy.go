@@ -14,25 +14,26 @@ import (
 
 // for getblock, ticketfeeinfo, estimatestakediff, etc.
 type chainMonitor struct {
-	collector          *blockDataCollector
-	dataSavers         []BlockDataSaver
-	blockConnectedChan chan int32
-	quit               chan struct{}
-	wg                 *sync.WaitGroup
-	noTicketPool       bool
+	collector    *blockDataCollector
+	dataSavers   []BlockDataSaver
+	quit         chan struct{}
+	wg           *sync.WaitGroup
+	noTicketPool bool
+	watchaddrs   map[string]TxAction
 }
 
 // newChainMonitor creates a new chainMonitor
 func newChainMonitor(collector *blockDataCollector,
-	blockConnChan chan int32, savers []BlockDataSaver,
-	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool) *chainMonitor {
+	savers []BlockDataSaver,
+	quit chan struct{}, wg *sync.WaitGroup, noPoolValue bool,
+	addrs map[string]TxAction) *chainMonitor {
 	return &chainMonitor{
-		collector:          collector,
-		dataSavers:         savers,
-		blockConnectedChan: blockConnChan,
-		quit:               quit,
-		wg:                 wg,
-		noTicketPool:       noPoolValue,
+		collector:    collector,
+		dataSavers:   savers,
+		quit:         quit,
+		wg:           wg,
+		noTicketPool: noPoolValue,
+		watchaddrs:   addrs,
 	}
 }
 
@@ -44,13 +45,28 @@ out:
 	for {
 	keepon:
 		select {
-		case height, ok := <-p.blockConnectedChan:
+		case hash, ok := <-spyChans.connectChan:
 			if !ok {
 				log.Warnf("Block connected channel closed.")
 				break out
 			}
+			block, _ := p.collector.dcrdChainSvr.GetBlock(hash)
+			height := block.Height()
 			daemonLog.Infof("Block height %v connected", height)
-			//atomic.StoreInt32(&glChainHeight, height)
+
+			if len(p.watchaddrs) > 0 {
+				// txsForOutpoints := blockConsumesOutpointWithAddresses(block, p.watchaddrs,
+				// 	p.collector.dcrdChainSvr)
+				// if len(txsForOutpoints) > 0 {
+				// 	p.spendTxBlockChan <- txsForOutpoints
+				// }
+
+				txsForAddrs := blockReceivesToAddresses(block, p.watchaddrs,
+					p.collector.dcrdChainSvr)
+				if len(txsForAddrs) > 0 {
+					spyChans.recvTxBlockChan <- txsForAddrs
+				}
+			}
 
 			// data collection with timeout
 			bdataChan := make(chan *blockData)
@@ -96,23 +112,21 @@ out:
 
 // for getstakeinfo, etc.
 type stakeMonitor struct {
-	collector          *stakeInfoDataCollector
-	dataSavers         []StakeInfoDataSaver
-	blockConnectedChan chan int32
-	quit               chan struct{}
-	wg                 *sync.WaitGroup
+	collector  *stakeInfoDataCollector
+	dataSavers []StakeInfoDataSaver
+	quit       chan struct{}
+	wg         *sync.WaitGroup
 }
 
 // newStakeMonitor creates a new stakeMonitor
 func newStakeMonitor(collector *stakeInfoDataCollector,
-	blockConnChan chan int32, savers []StakeInfoDataSaver,
+	savers []StakeInfoDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup) *stakeMonitor {
 	return &stakeMonitor{
-		collector:          collector,
-		dataSavers:         savers,
-		blockConnectedChan: blockConnChan,
-		quit:               quit,
-		wg:                 wg,
+		collector:  collector,
+		dataSavers: savers,
+		quit:       quit,
+		wg:         wg,
 	}
 }
 
@@ -123,7 +137,7 @@ func (p *stakeMonitor) blockConnectedHandler() {
 out:
 	for {
 		select {
-		case height, ok := <-p.blockConnectedChan:
+		case height, ok := <-spyChans.connectChanStkInf:
 			if !ok {
 				log.Warnf("Block connected channel closed.")
 				break out
