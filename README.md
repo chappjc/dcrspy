@@ -11,6 +11,8 @@ on the Decred network.  It works by connecting to both dcrd and dcrwallet
 and responding when a new block is detected via a [notifier registered with
 dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the [Decred JSON-RPC API][2].
 
+***Compatibility Notice*** - After Decred (i.e. dcrwallet and dcrd) version 0.6.0, the notifications API was changed, requiring dcrspy to update it's notification handlers.  Practically, this means that for version 0.6.0 and earlier of Decred it is required to use the [compatibility release "Millbarge"](https://github.com/chappjc/dcrspy/releases/tag/v0.6.0) or the [old-ntfns branch](https://github.com/chappjc/dcrspy/tree/old-ntfns), and for any Decred release *after* 0.6.0 use *at least* the dcrspy [pre-release of 0.7.0 , "Fletch"](https://github.com/chappjc/dcrspy/releases/tag/v0.7.0) or master.
+
 ## Types of Data
 
 The types of information monitored are:
