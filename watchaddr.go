@@ -7,16 +7,17 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
 )
 
-// handleReceivingTx should be run as a go routine, and handles notification
-// of transactions receiving to a registered address.  If no email notification
-// is required, emailConf may be a nil pointer.  addrs is a map of addresses as
-// strings with bool values indicating if email should be sent in response to
-// transactions involving the keyed address.
+// handleReceivingTx should be run as a go routine, and handles notification of
+// transactions receiving to a registered address.  If no email notification is
+// required, emailConf may be a nil pointer.  addrs is a map of addresses as
+// strings with TxAction values indicating if email should be sent in response
+// to transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	emailConf *emailConfig, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
@@ -37,18 +38,35 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				break receive
 			}
 
+			// Get block height of any of the mined transactions in this message
 			var height int64
 			for _, txs := range txsByAddr {
 				if len(txs) == 0 {
-					break receive
-				}
-				txh := txs[0].Sha()
-				txRes, err := c.GetRawTransactionVerbose(txh)
-				if err != nil {
-					log.Error("Unable to get raw transaction for", txh)
 					continue
 				}
-				height = txRes.BlockHeight
+
+				// Get height of mined tx
+				txh := txs[0].Sha()
+				txRes, err := c.GetTransaction(txh)
+				if err != nil {
+					log.Error("Unable to get transaction for", txh)
+					continue
+				}
+				bh, _ := chainhash.NewHashFromStr(txRes.BlockHash)
+				bl, err := c.GetBlock(bh)
+				if err != nil {
+					log.Error("Unable to get block for transaction", bh)
+					continue
+				}
+				height = bl.Height()
+
+				// TODO: why isn't this working?
+				// txRes, err := c.GetRawTransactionVerbose(txh)
+				// if err != nil {
+				// 	log.Error("Unable to get raw transaction for", txh)
+				// 	continue
+				// }
+				// height = txRes.BlockHeight
 				break
 			}
 

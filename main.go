@@ -10,7 +10,8 @@
 //
 // See README.md and TODO for more information.
 //
-// by Jonathan Chappelow (chappjc)
+// Copyright (c) 2016, Jonathan Chappelow
+// See LICENSE for details.
 //
 // Borrowing logging and config file facilities, plus much boilerplate from
 // main.go, from on dcrticketbuyer, by the Decred developers.

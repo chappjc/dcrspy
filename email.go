@@ -60,10 +60,10 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 	)
 
 	if err != nil {
-		log.Errorf("Failed to send email: %v", err)
+		log.Warnf("Failed to send email: %v", err)
 		return err
 	}
 
-	log.Tracef("Send email to address %v\n", ecfg.emailAddr)
+	log.Debugf("Sent email to address %v\n", ecfg.emailAddr)
 	return nil
 }
