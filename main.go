@@ -365,6 +365,10 @@ func mainCore() int {
 
 	// No addresses is implied if NoMonitor is true.
 	if len(addresses) > 0 {
+		if emailConfig != nil {
+			wg.Add(1)
+			go emailQueue(emailConfig, &wg, quit)
+		}
 		wg.Add(1)
 		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
 			&wg, quit)

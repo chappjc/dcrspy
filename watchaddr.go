@@ -15,10 +15,13 @@ import (
 	"time"
 )
 
-var mempoolRecvMsgStrings []string
-var mpEmailAge time.Duration
+var mpEmailMsgChan chan string
 
 var blockTxMsgStrings []string
+
+func init() {
+	mpEmailMsgChan = make(chan string, 200)
+}
 
 func tryGetTransaction(c *dcrrpcclient.Client, txh *chainhash.Hash,
 	maxTries int) (*dcrjson.GetTransactionResult, error) {
@@ -99,7 +102,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 			action := "mined into block"
 			txAction := TxMined
-			var recvStrings []string
+			//var recvStrings []string
 
 			// For each address in map, process each tx
 			for addr, txs := range txsByAddr {
@@ -135,7 +138,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 								// Email notification if watchaddress has the ",1"
 								// suffix AND we have a non-nil *emailConfig
 								if (addrActn&txAction) > 0 && emailConf != nil {
-									recvStrings = append(recvStrings, recvString)
+									mpEmailMsgChan <- recvString
 								}
 							}
 						}
@@ -143,9 +146,9 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 			}
 
-			if len(recvStrings) > 0 && emailConf != nil {
-				go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
-			}
+			// if len(recvStrings) > 0 && emailConf != nil {
+			// 	go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
+			// }
 
 		case tx, ok := <-spyChans.relevantTxMempoolChan:
 			if !ok {
@@ -189,17 +192,17 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 						// Email notification if watchaddress has the ",1"
 						// suffix AND we have a non-nil *emailConfig
 						if (addrActn&txAction) > 0 && emailConf != nil {
-							mempoolRecvMsgStrings = append(mempoolRecvMsgStrings, recvString)
+							mpEmailMsgChan <- recvString
 						}
 						continue
 					}
 				}
 			}
 
-			if len(mempoolRecvMsgStrings) > 10 || 
-				(mempoolRecvMsgStrings > 0 && mpEmailAge > time.Duration(2 * time.Second)) {
-				go sendEmailWatchRecv(strings.Join(mempoolRecvMsgStrings, "\n"), emailConf)
-			}
+			// if len(mempoolRecvMsgStrings) > 10 ||
+			// 	(mempoolRecvMsgStrings > 0 && mpEmailAge > time.Duration(2 * time.Second)) {
+			// 	go sendEmailWatchRecv(strings.Join(mempoolRecvMsgStrings, "\n"), emailConf)
+			// }
 
 		case <-quit:
 			mempoolLog.Debugf("Quitting OnRecvTx handler.")
@@ -211,18 +214,35 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 func emailQueue(emailConf *emailConfig, wg *sync.WaitGroup, quit <-chan struct{}) {
 	defer wg.Done()
+
+	var msgStrings []string
+	lastMsgTime := time.Now()
+	minEmailPeriod, maxEmailPeriod := 2*time.Second, 10*time.Second
+	ticker := time.NewTicker(500 * time.Millisecond)
+	defer ticker.Stop()
+
 	for {
 		//watchquit:
 		select {
-			case <-quit:
-				log.Debugf("Quitting emailQueue.")
+		case <-quit:
+			log.Debugf("Quitting emailQueue.")
+			return
+		case msg, ok := <-mpEmailMsgChan:
+			if !ok {
+				log.Info("emailQueue channel closed")
 				return
-			default:
-				numMessages := len(mempoolRecvMsgStrings)
-				if numMessages > 10 || (numMessages > 0 &&
-					mpEmailAge > time.Duration(2 * time.Second)) {
-					go sendEmailWatchRecv(strings.Join(mempoolRecvMsgStrings, "\n"), emailConf)
-				}
+			}
+			msgStrings = append(msgStrings, msg)
+			lastMsgTime = time.Now()
+		case <-ticker.C:
+			numMessages := len(msgStrings)
+			sinceLast := time.Since(lastMsgTime)
+			if (numMessages > 100) ||
+				(numMessages > 10 && sinceLast > minEmailPeriod) ||
+				(numMessages > 0 && sinceLast > maxEmailPeriod) {
+				go sendEmailWatchRecv(strings.Join(msgStrings, "\n"), emailConf)
+				msgStrings = nil
+			}
 		}
 	}
 }
