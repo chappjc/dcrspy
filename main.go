@@ -74,6 +74,9 @@ func mainCore() int {
 
 	// Daemon client connection
 	dcrdClient, err := connectNodeRPC(cfg)
+	if err != nil {
+		return 4
+	}
 
 	// Display connected network
 	curnet, err := dcrdClient.GetCurrentNet()
