@@ -12,6 +12,7 @@ import (
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
+	"math"
 	"time"
 )
 
@@ -217,9 +218,15 @@ func emailQueue(emailConf *emailConfig, wg *sync.WaitGroup, quit <-chan struct{}
 
 	var msgStrings []string
 	lastMsgTime := time.Now()
-	minEmailPeriod, maxEmailPeriod := 2*time.Second, 10*time.Second
 	ticker := time.NewTicker(500 * time.Millisecond)
 	defer ticker.Stop()
+
+	timeToWait := func(numMessages int) time.Duration {
+		if numMessages == 0 {
+			return math.MaxInt64
+		}
+		return 10 * time.Second / time.Duration(numMessages)
+	}
 
 	for {
 		//watchquit:
@@ -237,9 +244,7 @@ func emailQueue(emailConf *emailConfig, wg *sync.WaitGroup, quit <-chan struct{}
 		case <-ticker.C:
 			numMessages := len(msgStrings)
 			sinceLast := time.Since(lastMsgTime)
-			if (numMessages > 100) ||
-				(numMessages > 10 && sinceLast > minEmailPeriod) ||
-				(numMessages > 0 && sinceLast > maxEmailPeriod) {
+			if sinceLast > timeToWait(numMessages) {
 				go sendEmailWatchRecv(strings.Join(msgStrings, "\n"), emailConf)
 				msgStrings = nil
 			}
