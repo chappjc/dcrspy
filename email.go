@@ -64,6 +64,6 @@ func sendEmailWatchRecv(message string, ecfg *emailConfig) error {
 		return err
 	}
 
-	log.Debugf("Sent email to address %v\n", ecfg.emailAddr)
+	log.Debugf("Sent email to address %v", ecfg.emailAddr)
 	return nil
 }
