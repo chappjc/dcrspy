@@ -380,9 +380,6 @@ func loadConfig() (*config, error) {
 		return loadConfigError(err)
 	}
 
-	log.Debugf("Output folder: %v", cfg.OutFolder)
-	log.Debugf("Log folder: %v", cfg.LogDir)
-
 	// mempool: new transactions, new tickets
 	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor
 	if cfg.MonitorMempool && cfg.NoMonitor {

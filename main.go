@@ -49,7 +49,7 @@ const (
 // mainCore does all the work. Deferred functions do not run after os.Exit(),
 // so main wraps this function, which returns a code.
 func mainCore() int {
-	// Parse the configuration file.
+	// Parse the configuration file, and setup logger.
 	cfg, err := loadConfig()
 	if err != nil {
 		fmt.Printf("Failed to load dcrspy config: %s\n", err.Error())
@@ -57,9 +57,13 @@ func mainCore() int {
 	}
 	defer backendLog.Flush()
 
+	// Start with version info
+	log.Infof(appName+" version %s%v", ver.String(), spyart)
+
 	dcrrpcclient.UseLogger(clientLog)
 
-	log.Infof(appName+" version %s%v", ver.String(), spyart)
+	log.Debugf("Output folder: %v", cfg.OutFolder)
+	log.Debugf("Log folder: %v", cfg.LogDir)
 
 	// Create data output folder if it does not already exist
 	if os.MkdirAll(cfg.OutFolder, 0750) != nil {
@@ -73,7 +77,7 @@ func mainCore() int {
 	makeChans(cfg)
 
 	// Daemon client connection
-	dcrdClient, err := connectNodeRPC(cfg)
+	dcrdClient, nodeVer, err := connectNodeRPC(cfg)
 	if err != nil {
 		return 4
 	}
@@ -84,7 +88,8 @@ func mainCore() int {
 		fmt.Println("Unable to get current network from dcrd:", err.Error())
 		return 5
 	}
-	log.Infof("Connected to dcrd on network: %v", curnet.String())
+	log.Infof("Connected to dcrd (JSON-RPC API v%s) on %v",
+		nodeVer.String(), curnet.String())
 
 	// Validate each watchaddress
 	addresses := make([]dcrutil.Address, 0, len(cfg.WatchAddresses))
