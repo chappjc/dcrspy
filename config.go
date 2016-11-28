@@ -256,14 +256,15 @@ func loadConfig() (*config, error) {
 	// Pre-parse the command line options to see if an alternative config
 	// file or the version flag was specified.
 	preCfg := cfg
-	preParser := flags.NewParser(&preCfg, flags.Default)
+	preParser := flags.NewParser(&preCfg, flags.HelpFlag|flags.PassDoubleDash)
 	_, err := preParser.Parse()
 	if err != nil {
 		e, ok := err.(*flags.Error)
 		if !ok || e.Type != flags.ErrHelp {
 			preParser.WriteHelp(os.Stderr)
 		}
-		if e.Type == flags.ErrHelp {
+		if ok && e.Type == flags.ErrHelp {
+			preParser.WriteHelp(os.Stdout)
 			os.Exit(0)
 		}
 		return loadConfigError(err)

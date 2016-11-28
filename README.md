@@ -11,7 +11,16 @@ on the Decred network.  It works by connecting to both dcrd and dcrwallet
 and responding when a new block is detected via a [notifier registered with
 dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the [Decred JSON-RPC API][2].
 
-***Compatibility Notice*** - After Decred (i.e. dcrwallet and dcrd) version 0.6.0, the notifications API was changed, requiring dcrspy to update it's notification handlers.  Practically, this means that for version 0.6.0 and earlier of Decred it is required to use the [compatibility release "Millbarge"](https://github.com/chappjc/dcrspy/releases/tag/v0.6.0) or the [old-ntfns branch](https://github.com/chappjc/dcrspy/tree/old-ntfns), and for any Decred release *after* 0.6.0 use *at least* the dcrspy [pre-release of 0.7.0 , "Fletch"](https://github.com/chappjc/dcrspy/releases/tag/v0.7.0) or master.
+***Compatibility Notice*** - After Decred (i.e. dcrwallet and dcrd) version
+0.6.0, the notifications API was changed, requiring dcrspy to update it's
+notification handlers.  Practically, this means that for version 0.6.0 and
+earlier of Decred it is required to use the [compatibility release
+"Millbarge"](https://github.com/chappjc/dcrspy/releases/tag/v0.6.0) or the
+[old-ntfns branch](https://github.com/chappjc/dcrspy/tree/old-ntfns), and for
+any Decred release *after* 0.6.0 use *at least* dcrspy v0.7.0, preferably
+[latest](https://github.com/chappjc/dcrspy/releases), or master. The version of
+dcrspy on master will use the new `version` RPC to check that the RPC server has
+a compatible API version.
 
 ## Types of Data
 
@@ -90,7 +99,8 @@ line in the config file).  For example:
 ~~~
 
 To receive an email notification for each transaction receiving to a watched
-address, concatenate "`,1`" at the end of the address.  For example:
+address, concatenate at the end of the address: "`,1`" for mined transactions,
+"`,2`" for transactions inserted into mempool, or "`,3`" for both.  For example:
 
 ~~~none
 ; Receive email notifications for this one
@@ -99,6 +109,8 @@ address, concatenate "`,1`" at the end of the address.  For example:
 ;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus,0
 ; and not by default
 ;watchaddress=DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE
+; Mined and mempool for this:
+;watchaddress=DsWM9WbE3YyRKxGGNdBYXCwJoxiBtXFrZBL,3
 ~~~
 
 An SMTP server name, port, authentication information, and a recipient email
@@ -106,6 +118,7 @@ address must also be specified to use email notifications.
 
 ~~~none
 emailaddr=chappjc@receiving.com
+emailsubj="dcrspy tx notification"
 smtpuser=smtpuser@mailprovider.net
 smtppass=suPErSCRTpasswurd
 smtpserver=smtp.mailprovider.org:587
@@ -180,8 +193,6 @@ example above.
 
 dcrspy is functional, but also a **work-in-progress**.  However, I will try to keep
 `master` as stable as possible, and develop new features in separate branches.
-
-There is a [very long to-do list](https://drive.google.com/open?id=1Z057i7tGfnATWu0w7loetIkGElteNnlx2bJSxPvVOqE).
 
 ## Requirements
 
@@ -259,43 +270,50 @@ Usage:
   dcrspy [OPTIONS]
 
 Application Options:
-  -C, --configfile=      Path to configuration file (.../dcrspy.conf)
-  -V, --version          Display version information and exit
-      --testnet          Use the test network (default mainnet)
-      --simnet           Use the simulation test network (default mainnet)
-  -d, --debuglevel=      Logging level {trace, debug, info, warn, error, critical} (info)
-  -q, --quiet            Easy way to set debuglevel to error
-      --logdir=          Directory to log output (.../logs)
-  -c, --cmdname=         Command name to run. Must be on %PATH%.
-  -a, --cmdargs=         Comma-separated list of aruguments for command to run.
-  -e, --nomonitor        Do not launch monitors. Display current data and (e)xit.
+  -C, --configfile=        Path to configuration file (./dcrspy-testnet.conf)
+  -V, --version            Display version information and exit
+      --testnet            Use the test network (default mainnet)
+      --simnet             Use the simulation test network (default mainnet)
+  -d, --debuglevel=        Logging level {trace, debug, info, warn, error, critical} (info)
+  -q, --quiet              Easy way to set debuglevel to error
+      --logdir=            Directory to log output (./logs)
+  -c, --cmdname=           Command name to run. Must be on %PATH%.
+  -a, --cmdargs=           Comma-separated list of arguments for command to run. The specifier %n is substituted for block height at execution, and %h is
+                           substituted for block hash.
+  -e, --nomonitor          Do not launch monitors. Display current data and (e)xit.
   -m, --mempool            Monitor mempool for new transactions, and report ticketfee info when new tickets are added.
       --mp-min-interval=   The minimum time in seconds between mempool reports, regarless of number of new tickets seen. (4)
       --mp-max-interval=   The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen. (120)
       --mp-ticket-trigger= The number minimum number of new tickets that must be seen to trigger a new mempool report. (4)
-      --noblockdata      Do not collect block data (default false)
-      --nostakeinfo      Do not collect stake info data (default false)
-  -p, --poolvalue        Collect ticket pool value information (8-9 sec).
-  -f, --outfolder=       Folder for file outputs (.../spydata)
-  -w, --watchaddress=      Decred address for which to watch for incoming transactions. One per line.
-  -s, --summary          Write plain text summary of key data to stdout
-  -o, --save-jsonstdout  Save JSON-formatted data to stdout
-  -j, --save-jsonfile    Save JSON-formatted data to file
-      --dcrduser=        Daemon RPC user name
-      --dcrdpass=        Daemon RPC password
-      --dcrdserv=        Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet: localhost:19556)
-      --dcrdcert=        File containing the dcrd certificate file (~/.dcrd/rpc.cert)
-      --dcrwuser=        Wallet RPC user name
-      --dcrwpass=        Wallet RPC password
-      --dcrwserv=        Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet: localhost:19557)
-      --dcrwcert=        File containing the dcrwallet certificate file (~/.dcrwallet/rpc.cert)
-      --noclienttls      Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost
-      --accountname=     Name of the account from (default: default) (default)
-      --ticketaddress=   Address to which you have given voting rights
-      --pooladdress=     Address to which you have given rights to pool fees
+  -r, --feewinradius=      Half-width of a window around the ticket with the lowest mineable fee.
+      --dumpallmptix       Dump to file the fees of all the tickets in mempool.
+      --noblockdata        Do not collect block data (default false)
+      --nostakeinfo        Do not collect stake info data (default false)
+  -p, --poolvalue          Collect ticket pool value information (8-9 sec).
+  -w, --watchaddress=      Watched address (receiving). One per line.
+      --smtpuser=          SMTP user name
+      --smtppass=          SMTP password
+      --smtpserver=        SMTP host name
+      --emailaddr=         Destination email address for alerts
+      --emailsubj=         Email subject. (default "dcrspy transaction notification") (dcrspy tx notification)
+  -s, --summary            Write plain text summary of key data to stdout
+  -o, --save-jsonstdout    Save JSON-formatted data to stdout
+  -j, --save-jsonfile      Save JSON-formatted data to file
+  -f, --outfolder=         Folder for file outputs (./spydata)
+      --dcrduser=          Daemon RPC user name
+      --dcrdpass=          Daemon RPC password
+      --dcrdserv=          Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet:
+                           localhost:19556)
+      --dcrdcert=          File containing the dcrd certificate file (~/.dcrd/rpc.cert)
+      --dcrwuser=          Wallet RPC user name
+      --dcrwpass=          Wallet RPC password
+      --dcrwserv=          Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet:
+                           localhost:19557)
+      --dcrwcert=          File containing the dcrwallet certificate file (~/.dcrwallet/rpc.cert)
+      --noclienttls        Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost
 
 Help Options:
-  -h, --help             Show this help message
+  -h, --help               Show this help message
 ~~~
 
 ### Config file
@@ -307,6 +325,7 @@ dcrspy.conf by default.
 [Application Options]
 
 debuglevel=debug
+;debuglevel=DSPY=info,EXEC=debug,MEMP=debug,DCRD=info,DCRW=info,RPCC=info
 
 ;cmdname=echo
 ;cmdargs="New best block hash: %h; height: %n"
@@ -318,6 +337,9 @@ debuglevel=debug
 ;mp-min-interval=4
 ;mp-max-interval=120
 ;mp-ticket-trigger=4
+; Show the ticket fee at the limit of mineability (20th or highest), plus show
+; windows of fees above and below this limit within the specified radius.
+;feewinradius=7
 
 ; Addresses to watch for incoming transactions
 ; Decred developer (C0) address
@@ -325,9 +347,19 @@ debuglevel=debug
 ; Some larger mining pool addresses:
 ;watchaddress=DsYAN3vT15rjzgoGgEEscoUpPCRtwQKL7dQ
 ;watchaddress=DshZYJySTD4epCyoKRjPMyVmSvBpFuNYuZ4
-;watchaddress=DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW
-;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus
+; receive email notifications for this one
+;watchaddress=DsZWrNNyKDUFPNMcjNYD7A8k9a4HCM5xgsW,1
+; but not this one
+;watchaddress=Dsg2bQy2yt2onEcaQhT1X9UbTKNtqmHyMus,0
+; and not by default
 ;watchaddress=DskFbReCFNUjVHDf2WQP7AUKdB27EfSPYYE
+
+; SMTP server setup
+;emailaddr=you@receiving.com
+;emailsubj="dcrspy tx notification"
+;smtpuser=smtpuser@mailprovider.net
+;smtppass=suPErSCRTpasswurd
+;smtpserver=smtp.mailprovider.org:587
 
 ; Ticket pool value takes a long time, 8-9 sec, so the default is false.
 ;poolvalue=false
@@ -338,10 +370,6 @@ debuglevel=debug
 ; outfolder=%appdata%/dcrspy/spydata
 ; Linux
 ; outfolder=$HOME/dcrspy/spydata
-
-; Uncomment for testnet
-;testnet=1
-; But also remember ports below, or do not specify for network defaults.
 
 dcrduser=duser
 dcrdpass=asdfExample
@@ -354,6 +382,8 @@ dcrwpass=qwertyExample
 
 dcrwserv=localhost:9110
 dcrwcert=/home/me/.dcrwallet/rpc.cert
+
+;noclienttls=false
 ~~~
 
 ## Data Details
