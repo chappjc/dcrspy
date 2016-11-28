@@ -99,8 +99,10 @@ func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]T
 	return addrMap
 }
 
-func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
-	c *dcrrpcclient.Client) map[string][]*dcrutil.Tx {
+// BlockReceivesToAddresses checks a block for transactions paying to the
+// specified addresses, and creates a map of addresses to a slice of dcrutil.Tx
+// involving the address.
+func BlockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction) map[string][]*dcrutil.Tx {
 	addrMap := make(map[string][]*dcrutil.Tx)
 
 	checkForAddrOut := func(blockTxs []*dcrutil.Tx) {
@@ -119,9 +121,8 @@ func blockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction,
 					addrstr := txAddr.EncodeAddress()
 					if _, ok := addrs[addrstr]; ok {
 						if _, gotSlice := addrMap[addrstr]; !gotSlice {
-							addrMap[addrstr] = make([]*dcrutil.Tx, 0)
+							addrMap[addrstr] = make([]*dcrutil.Tx, 0) // nil
 						}
-						//log.Info("Receives to: ", addrstr)
 						addrMap[addrstr] = append(addrMap[addrstr], tx)
 					}
 				}

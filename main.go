@@ -168,7 +168,7 @@ func mainCore() int {
 	// 	os.Exit(1)
 	// }
 
-	if err := dcrdClient.NotifyWinningTickets(); err != nil {
+	if err = dcrdClient.NotifyWinningTickets(); err != nil {
 		fmt.Printf("Failed to register daemon RPC client for  "+
 			"winning tickets notifications: %s\n", err.Error())
 		os.Exit(1)
@@ -275,7 +275,7 @@ func mainCore() int {
 		return 10
 	}
 
-	if err := summarySaverBlockData.Store(blockData); err != nil {
+	if err = summarySaverBlockData.Store(blockData); err != nil {
 		fmt.Printf("Failed to print initial block data summary: %v",
 			err.Error())
 		return 11
@@ -352,8 +352,8 @@ func mainCore() int {
 		}
 
 		newTicketLimit := int32(cfg.MPTriggerTickets)
-		mini := time.Duration(time.Duration(cfg.MempoolMinInterval) * time.Second)
-		maxi := time.Duration(time.Duration(cfg.MempoolMaxInterval) * time.Second)
+		mini := time.Duration(cfg.MempoolMinInterval) * time.Second
+		maxi := time.Duration(cfg.MempoolMaxInterval) * time.Second
 
 		wg.Add(1)
 		mpm := newMempoolMonitor(mpoolCollector, mempoolSavers,
@@ -372,7 +372,7 @@ func mainCore() int {
 	if len(addresses) > 0 {
 		if emailConfig != nil {
 			wg.Add(1)
-			go emailQueue(emailConfig, &wg, quit)
+			go EmailQueue(emailConfig, cfg.EmailSubject, &wg, quit)
 		}
 		wg.Add(1)
 		go handleReceivingTx(dcrdClient, addrMap, emailConfig,
@@ -475,7 +475,7 @@ func decodeNetAddr(addr string) dcrutil.Address {
 	return address
 }
 
-func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
+func getEmailConfig(cfg *config) (emailConf *EmailConfig, err error) {
 	smtpHost, smtpPort, err := net.SplitHostPort(cfg.SMTPServer)
 	if err != nil {
 		return
@@ -486,7 +486,7 @@ func getEmailConfig(cfg *config) (emailConf *emailConfig, err error) {
 		return
 	}
 
-	emailConf = &emailConfig{
+	emailConf = &EmailConfig{
 		emailAddr:  cfg.EmailAddr,
 		smtpUser:   cfg.SMTPUser,
 		smtpPass:   cfg.SMTPPass,
