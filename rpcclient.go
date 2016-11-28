@@ -7,6 +7,10 @@ import (
 	"github.com/decred/dcrrpcclient"
 )
 
+var requiredChainServerAPI = semver{major: 2, minor: 0, patch: 0}
+
+//var requiredWalletAPI = semver{major: 2, minor: 0, patch: 0}
+
 func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 	var dcrwCerts []byte
 	var err error
@@ -41,6 +45,9 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 			cfg.DcrwCert)
 		return nil, err
 	}
+
+	// TODO: Ensure the RPC server has a compatible API version.
+
 	return dcrwClient, nil
 }
 
@@ -75,5 +82,23 @@ func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, error) {
 		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
 		return nil, err
 	}
+
+	// Ensure the RPC server has a compatible API version.
+	var serverAPI semver
+	ver, err := dcrdClient.Version()
+	if err != nil {
+		log.Warn("Unable to get RPC version: ", err)
+		return nil, fmt.Errorf("Unable to get node RPC version")
+	}
+
+	dcrdVer := ver["dcrdjsonrpcapi"]
+	serverAPI = semver{dcrdVer.Major, dcrdVer.Minor, dcrdVer.Patch}
+
+	if !semverCompatible(requiredChainServerAPI, serverAPI) {
+		return nil, fmt.Errorf("Node JSON-RPC server does not have a "+
+			"compatible API version. Advertises %v but require %v",
+			serverAPI, requiredChainServerAPI)
+	}
+
 	return dcrdClient, nil
 }
