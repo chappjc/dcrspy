@@ -33,6 +33,7 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
+	"runtime/pprof"
 )
 
 const (
@@ -56,6 +57,16 @@ func mainCore() int {
 		return 1
 	}
 	defer backendLog.Flush()
+
+	if cfg.CPUProfile != "" {
+		f, err := os.Create(cfg.CPUProfile)
+		if err != nil {
+			log.Critical(err)
+			return -1
+		}
+		pprof.StartCPUProfile(f)
+		defer pprof.StopCPUProfile()
+	}
 
 	// Start with version info
 	log.Infof(appName+" version %s%v", ver.String(), spyart)

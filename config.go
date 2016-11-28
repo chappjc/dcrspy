@@ -66,6 +66,7 @@ type config struct {
 	DebugLevel  string `short:"d" long:"debuglevel" description:"Logging level {trace, debug, info, warn, error, critical}"`
 	Quiet       bool   `short:"q" long:"quiet" description:"Easy way to set debuglevel to error"`
 	LogDir      string `long:"logdir" description:"Directory to log output"`
+	CPUProfile  string `long:"cpuprofile" description:"File for CPU profiling."`
 
 	// Comamnd execution
 	CmdName string `short:"c" long:"cmdname" description:"Command name to run. Must be on %PATH%."`
