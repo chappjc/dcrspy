@@ -4,14 +4,55 @@ package main
 
 import (
 	"fmt"
-	"strings"
 	"sync"
+	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrjson"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
 )
+
+// tryGetTransaction and tryGetRawTransactionVerbose are hacks while I figure
+// out the issue with getting the block hash from a transaction that is
+// supposedly mined.
+
+func tryGetTransaction(c *dcrrpcclient.Client, txh *chainhash.Hash,
+	maxTries int) (*dcrjson.GetTransactionResult, error) {
+	numTries := 0
+	for {
+		txRes, err := c.GetTransaction(txh)
+		if err != nil {
+			if numTries == maxTries {
+				return nil, err
+			}
+			//log.Error("Unable to get transaction for", txh)
+			numTries++
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		return txRes, nil
+	}
+}
+
+func tryGetRawTransactionVerbose(c *dcrrpcclient.Client, txh *chainhash.Hash,
+	maxTries int) (*dcrjson.TxRawResult, error) {
+	numTries := 0
+	for {
+		txRes, err := c.GetRawTransactionVerbose(txh)
+		if err != nil {
+			if numTries == maxTries {
+				return nil, err
+			}
+			//log.Error("Unable to get transaction for", txh)
+			numTries++
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		return txRes, nil
+	}
+}
 
 // handleReceivingTx should be run as a go routine, and handles notification of
 // transactions receiving to a registered address.  If no email notification is
@@ -19,7 +60,7 @@ import (
 // strings with TxAction values indicating if email should be sent in response
 // to transactions involving the keyed address.
 func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
-	emailConf *emailConfig, wg *sync.WaitGroup,
+	emailConf *EmailConfig, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
 	//out:
@@ -27,7 +68,8 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 	receive:
 		select {
 		// The message with all tx for watched addresses in new block
-		case txsByAddr, ok := <-spyChans.recvTxBlockChan:
+		case blockWatchedTxs, ok := <-spyChans.recvTxBlockChan:
+			txsByAddr := blockWatchedTxs.TxsForAddress
 			// map[string][]*dcrutil.Tx is a map of addresses to slices of
 			// transactions using that address.
 			if !ok {
@@ -38,41 +80,8 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				break receive
 			}
 
-			// Get block height of any of the mined transactions in this message
-			var height int64
-			for _, txs := range txsByAddr {
-				if len(txs) == 0 {
-					continue
-				}
-
-				// Get height of mined tx
-				txh := txs[0].Sha()
-				txRes, err := c.GetTransaction(txh)
-				if err != nil {
-					log.Error("Unable to get transaction for", txh)
-					continue
-				}
-				bh, _ := chainhash.NewHashFromStr(txRes.BlockHash)
-				bl, err := c.GetBlock(bh)
-				if err != nil {
-					log.Error("Unable to get block for transaction", bh)
-					continue
-				}
-				height = bl.Height()
-
-				// TODO: why isn't this working?
-				// txRes, err := c.GetRawTransactionVerbose(txh)
-				// if err != nil {
-				// 	log.Error("Unable to get raw transaction for", txh)
-				// 	continue
-				// }
-				// height = txRes.BlockHeight
-				break
-			}
-
-			action := "mined into block"
-			txAction := TxMined
-			var recvStrings []string
+			// Height is now in the message
+			height := blockWatchedTxs.BlockHeight
 
 			// For each address in map, process each tx
 			for addr, txs := range txsByAddr {
@@ -81,15 +90,19 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 
 				for _, tx := range txs {
+					txHash := tx.Sha().String()
 					// Check the addresses associated with the PkScript of each TxOut
 					for outID, txOut := range tx.MsgTx().TxOut {
-						_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
-							txOut.PkScript, activeChain)
+						scriptClass, txAddrs, _, err :=
+							txscript.ExtractPkScriptAddrs(txOut.Version,
+								txOut.PkScript, activeChain)
 						if err != nil {
 							log.Infof("ExtractPkScriptAddrs: %v", err.Error())
 							// Next TxOut
 							continue
 						}
+
+						value := dcrutil.Amount(txOut.Value).ToCoin()
 
 						// Check if this is a TxOut for the address
 						for _, txAddr := range txAddrs {
@@ -99,25 +112,23 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 								continue
 							}
 							if addrActn, ok := addrs[addr]; ok {
-								recvString := fmt.Sprintf(
-									"Transaction sending to %v, value %.6f, "+
-										"%s %d: %s[%d]",
-									addr, dcrutil.Amount(txOut.Value).ToCoin(),
-									action, height, tx.Sha().String(), outID)
+
+								recvString := fmt.Sprintf("Mined in block %d: "+
+									"%s receiving %.6f DCR, type: %s "+
+									"(%s[out:%d])",
+									height, addr, value, scriptClass.String(),
+									txHash, outID)
 								log.Infof(recvString)
-								// Email notification if watchaddress has the ",1"
-								// suffix AND we have a non-nil *emailConfig
-								if (addrActn&txAction) > 0 && emailConf != nil {
-									recvStrings = append(recvStrings, recvString)
+								// Email notification if watchaddress has a
+								// suffix with the TxMined bit AND emailConf is
+								// non-nil.
+								if (addrActn&TxMined) > 0 && emailConf != nil {
+									EmailMsgChan <- recvString
 								}
 							}
 						}
 					}
 				}
-			}
-
-			if len(recvStrings) > 0 && emailConf != nil {
-				go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
 			}
 
 		case tx, ok := <-spyChans.relevantTxMempoolChan:
@@ -136,11 +147,9 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 			// TODO also make this function handle mined tx again, with a
 			// gettransaction to see if it's in a block
-			action := "inserted into mempool"
-			txAction := TxInserted
+			txHash := tx.Sha().String()
 
 			// Check the addresses associated with the PkScript of each TxOut
-			var recvStrings []string
 			for _, txOut := range tx.MsgTx().TxOut {
 				_, txAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
 					txOut.PkScript, activeChain)
@@ -149,28 +158,24 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 					continue
 				}
 
+				value := dcrutil.Amount(txOut.Value).ToCoin()
+
 				// Check if we are watching any address for this TxOut
 				for _, txAddr := range txAddrs {
 					addrstr := txAddr.EncodeAddress()
 					if addrActn, ok := addrs[addrstr]; ok {
-						recvString := fmt.Sprintf(
-							"Transaction sending to %v, value %.6f, %v"+
-								", after block %d: %s",
-							addrstr, dcrutil.Amount(txOut.Value).ToCoin(),
-							action, height, tx.Sha().String())
+						recvString := fmt.Sprintf("Inserted into mempool: %s "+
+							"receiving %.6f, best block: %d (%s)",
+							addrstr, value, height, txHash)
 						log.Infof(recvString)
-						// Email notification if watchaddress has the ",1"
-						// suffix AND we have a non-nil *emailConfig
-						if (addrActn&txAction) > 0 && emailConf != nil {
-							recvStrings = append(recvStrings, recvString)
+						// Email notification if watchaddress has a suffix with
+						// the TxInserted bit AND we have a non-nil *emailConfig
+						if (addrActn&TxInserted) > 0 && emailConf != nil {
+							EmailMsgChan <- recvString
 						}
 						continue
 					}
 				}
-			}
-
-			if len(recvStrings) > 0 {
-				go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
 			}
 
 		case <-quit:

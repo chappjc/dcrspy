@@ -20,6 +20,13 @@ const (
 	relevantMempoolTxChanBuffer = 512
 )
 
+// BlockWatchedTx contains, for a certain block, the transactions for certain
+// watched addresses
+type BlockWatchedTx struct {
+	BlockHeight   int64
+	TxsForAddress map[string][]*dcrutil.Tx
+}
+
 // Channels are package-level variables for simplicity
 var spyChans struct {
 	txTicker *time.Ticker
@@ -27,7 +34,7 @@ var spyChans struct {
 	connectChan                       chan *chainhash.Hash
 	stakeDiffChan                     chan int64
 	connectChanStkInf                 chan int32
-	spendTxBlockChan, recvTxBlockChan chan map[string][]*dcrutil.Tx
+	spendTxBlockChan, recvTxBlockChan chan *BlockWatchedTx
 	relevantTxMempoolChan             chan *dcrutil.Tx
 	newTxChan                         chan *chainhash.Hash
 }
@@ -52,8 +59,8 @@ func makeChans(cfg *config) {
 	// watchaddress
 	if len(cfg.WatchAddresses) > 0 && !cfg.NoMonitor {
 		// recv/spendTxBlockChan come with connected blocks
-		spyChans.recvTxBlockChan = make(chan map[string][]*dcrutil.Tx, blockConnChanBuffer)
-		spyChans.spendTxBlockChan = make(chan map[string][]*dcrutil.Tx, blockConnChanBuffer)
+		spyChans.recvTxBlockChan = make(chan *BlockWatchedTx, blockConnChanBuffer)
+		spyChans.spendTxBlockChan = make(chan *BlockWatchedTx, blockConnChanBuffer)
 		spyChans.relevantTxMempoolChan = make(chan *dcrutil.Tx, relevantMempoolTxChanBuffer)
 	}
 

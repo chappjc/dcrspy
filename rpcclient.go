@@ -7,6 +7,10 @@ import (
 	"github.com/decred/dcrrpcclient"
 )
 
+var requiredChainServerAPI = semver{major: 2, minor: 0, patch: 0}
+
+//var requiredWalletAPI = semver{major: 2, minor: 0, patch: 0}
+
 func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 	var dcrwCerts []byte
 	var err error
@@ -35,24 +39,28 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 	ntfnHandlers := getWalletNtfnHandlers(cfg)
 	dcrwClient, err := dcrrpcclient.New(connCfgWallet, ntfnHandlers)
 	if err != nil {
-		fmt.Printf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
+		log.Errorf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
 			" wanted to start with --nostakeinfo?\n", err.Error())
-		fmt.Printf("Verify that rpc.cert is for your wallet:\n\t%v",
+		log.Errorf("Verify that rpc.cert is for your wallet:\n\t%v",
 			cfg.DcrwCert)
 		return nil, err
 	}
+
+	// TODO: Ensure the RPC server has a compatible API version.
+
 	return dcrwClient, nil
 }
 
-func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, error) {
+func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	var dcrdCerts []byte
 	var err error
+	var nodeVer semver
 	if !cfg.DisableClientTLS {
 		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
 		if err != nil {
-			fmt.Printf("Failed to read dcrd cert file at %s: %s\n",
+			log.Errorf("Failed to read dcrd cert file at %s: %s\n",
 				cfg.DcrdCert, err.Error())
-			return nil, err
+			return nil, nodeVer, err
 		}
 	}
 
@@ -72,8 +80,25 @@ func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, error) {
 	ntfnHandlers := getNodeNtfnHandlers(cfg)
 	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, ntfnHandlers)
 	if err != nil {
-		fmt.Printf("Failed to start dcrd RPC client: %s\n", err.Error())
-		return nil, err
+		log.Errorf("Failed to start dcrd RPC client: %s\n", err.Error())
+		return nil, nodeVer, err
 	}
-	return dcrdClient, nil
+
+	// Ensure the RPC server has a compatible API version.
+	ver, err := dcrdClient.Version()
+	if err != nil {
+		log.Error("Unable to get RPC version: ", err)
+		return nil, nodeVer, fmt.Errorf("Unable to get node RPC version")
+	}
+
+	dcrdVer := ver["dcrdjsonrpcapi"]
+	nodeVer = semver{dcrdVer.Major, dcrdVer.Minor, dcrdVer.Patch}
+
+	if !semverCompatible(requiredChainServerAPI, nodeVer) {
+		return nil, nodeVer, fmt.Errorf("Node JSON-RPC server does not have "+
+			"a compatible API version. Advertises %v but require %v",
+			nodeVer, requiredChainServerAPI)
+	}
+
+	return dcrdClient, nodeVer, nil
 }

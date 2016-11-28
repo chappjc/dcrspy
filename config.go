@@ -44,6 +44,7 @@ var (
 	defaultLogDir            = filepath.Join(curDir, defaultLogDirname)
 	defaultOutputDir         = filepath.Join(curDir, defaultOutputDirname)
 	defaultHost              = "localhost"
+	defaultEmailSubject      = "dcrspy transaction notification"
 
 	defaultMonitorMempool     = false
 	defaultMempoolMinInterval = 4
@@ -85,10 +86,11 @@ type config struct {
 	WatchAddresses []string `short:"w" long:"watchaddress" description:"Watched address (receiving). One per line."`
 	//WatchOutpoints []string `short:"o" long:"watchout" description:"Watched outpoint (sending). One per line."`
 
-	SMTPUser   string `long:"smtpuser" description:"SMTP user name"`
-	SMTPPass   string `long:"smtppass" description:"SMTP password"`
-	SMTPServer string `long:"smtpserver" description:"SMTP host name"`
-	EmailAddr  string `long:"emailaddr" description:"Destination email address for alerts"`
+	SMTPUser     string `long:"smtpuser" description:"SMTP user name"`
+	SMTPPass     string `long:"smtppass" description:"SMTP password"`
+	SMTPServer   string `long:"smtpserver" description:"SMTP host name"`
+	EmailAddr    string `long:"emailaddr" description:"Destination email address for alerts"`
+	EmailSubject string `long:"emailsubj" description:"Email subject. (default \"dcrspy transaction notification\")"`
 
 	SummaryOut     bool   `short:"s" long:"summary" description:"Write plain text summary of key data to stdout"`
 	SaveJSONStdout bool   `short:"o" long:"save-jsonstdout" description:"Save JSON-formatted data to stdout"`
@@ -127,6 +129,7 @@ var (
 		MempoolMaxInterval: defaultMempoolMaxInterval,
 		MPTriggerTickets:   defaultMPTriggerTickets,
 		FeeWinRadius:       defaultFeeWinRadius,
+		EmailSubject:       defaultEmailSubject,
 		// AccountName:        defaultAccountName,
 		// TicketAddress:      defaultTicketAddress,
 		// PoolAddress:        defaultPoolAddress,
@@ -379,9 +382,6 @@ func loadConfig() (*config, error) {
 		parser.WriteHelp(os.Stderr)
 		return loadConfigError(err)
 	}
-
-	log.Debugf("Output folder: %v", cfg.OutFolder)
-	log.Debugf("Log folder: %v", cfg.LogDir)
 
 	// mempool: new transactions, new tickets
 	//cfg.MonitorMempool = cfg.MonitorMempool && !cfg.NoMonitor

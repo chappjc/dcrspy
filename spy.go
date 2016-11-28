@@ -58,13 +58,13 @@ out:
 				// txsForOutpoints := blockConsumesOutpointWithAddresses(block, p.watchaddrs,
 				// 	p.collector.dcrdChainSvr)
 				// if len(txsForOutpoints) > 0 {
-				// 	p.spendTxBlockChan <- txsForOutpoints
+				// 	p.spendTxBlockChan <- &BlockWatchedTx{height, txsForOutpoints}
 				// }
 
-				txsForAddrs := blockReceivesToAddresses(block, p.watchaddrs,
-					p.collector.dcrdChainSvr)
+				txsForAddrs := BlockReceivesToAddresses(block, p.watchaddrs)
 				if len(txsForAddrs) > 0 {
-					spyChans.recvTxBlockChan <- txsForAddrs
+					spyChans.recvTxBlockChan <- &BlockWatchedTx{height,
+						txsForAddrs}
 				}
 			}
 
