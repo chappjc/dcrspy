@@ -41,16 +41,14 @@ func SendEmailWatchRecv(message, subject string, ecfg *EmailConfig) error {
 
 	// The SMTP server address includes the port
 	addr := ecfg.smtpServer + ":" + strconv.Itoa(ecfg.smtpPort)
-	//log.Debug(addr)
 
 	// Make a header using a map for clarity
 	header := make(map[string]string)
 	header["From"] = ecfg.smtpUser
 	header["To"] = ecfg.emailAddr
-	// TODO: make subject line adjustable or include an amount
 	header["Subject"] = subject
 	//header["MIME-Version"] = "1.0"
-	//header["Content-Type"] = "text/plain; charset=\"utf-8\""
+	header["Content-Type"] = `text/plain; charset="utf-8"`
 	//header["Content-Transfer-Encoding"] = "base64"
 
 	// Build the full message with the header + input message string
@@ -84,7 +82,7 @@ func sendEmailWatchRecv(message, subject string, ecfg *EmailConfig) {
 		log.Warn(err)
 		return
 	}
-	log.Debugf("Sent email to address %v", ecfg.emailAddr)
+	log.Debugf("Sent email to %v", ecfg.emailAddr)
 }
 
 // EmailQueue batches messages into single emails, using a progressively shorter

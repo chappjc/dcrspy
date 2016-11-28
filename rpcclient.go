@@ -9,6 +9,7 @@ import (
 
 var requiredChainServerAPI = semver{major: 2, minor: 0, patch: 0}
 
+// When and RPC for wallet api version is available:
 //var requiredWalletAPI = semver{major: 2, minor: 0, patch: 0}
 
 func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
@@ -46,7 +47,7 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 		return nil, err
 	}
 
-	// TODO: Ensure the RPC server has a compatible API version.
+	// TODO: Ensure the wallet RPC server has a compatible API version.
 
 	return dcrwClient, nil
 }
