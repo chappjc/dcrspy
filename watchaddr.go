@@ -35,7 +35,25 @@ func tryGetTransaction(c *dcrrpcclient.Client, txh *chainhash.Hash,
 			}
 			//log.Error("Unable to get transaction for", txh)
 			numTries++
-			time.Sleep(250 * time.Millisecond)
+			time.Sleep(300 * time.Millisecond)
+			continue
+		}
+		return txRes, nil
+	}
+}
+
+func tryGetRawTransactionVerbose(c *dcrrpcclient.Client, txh *chainhash.Hash,
+	maxTries int) (*dcrjson.TxRawResult, error) {
+	numTries := 0
+	for {
+		txRes, err := c.GetRawTransactionVerbose(txh)
+		if err != nil {
+			if numTries == maxTries {
+				return nil, err
+			}
+			//log.Error("Unable to get transaction for", txh)
+			numTries++
+			time.Sleep(300 * time.Millisecond)
 			continue
 		}
 		return txRes, nil
@@ -69,7 +87,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 			// Get block height of any of the mined transactions in this message
 			height, _ := c.GetBlockCount()
-			/*var height int64
+			var heightTx int64
 			for _, txs := range txsByAddr {
 				if len(txs) == 0 {
 					continue
@@ -77,29 +95,35 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 				// Get height of mined tx
 				txh := txs[0].MsgTx().TxSha()
-				txRes, err := tryGetTransaction(c, &txh, 5)
-				//txRes, err := c.GetTransaction(&txh)
-				if err != nil {
-					log.Error("Unable to get transaction for ", txh)
-					continue
-				}
-				bh, _ := chainhash.NewHashFromStr(txRes.BlockHash)
-				bl, err := c.GetBlock(bh)
-				if err != nil {
-					log.Error("Unable to get block for transaction ", bh)
-					continue
-				}
-				height = bl.Height()
 
-				// TODO: why isn't this working?
-				// txRes, err := c.GetRawTransactionVerbose(txh)
+				// TODO: why can't we get the block for this supposedly mined tx
+				//txRes, err := tryGetTransaction(c, &txh, 5)
+				//txRes, err := c.GetTransaction(&txh)
 				// if err != nil {
-				// 	log.Error("Unable to get raw transaction for", txh)
+				// 	log.Error("Unable to get transaction for ", txh)
 				// 	continue
 				// }
-				// height = txRes.BlockHeight
+				// bh, _ := chainhash.NewHashFromStr(txRes.BlockHash)
+				// bl, err := c.GetBlock(bh)
+				// if err != nil {
+				// 	log.Error("Unable to get block for transaction ", bh)
+				// 	continue
+				// }
+				// heightTx = bl.Height()
+
+				//txRes, err := c.GetRawTransactionVerbose(txh)
+				txRes, err := tryGetRawTransactionVerbose(c, &txh, 5)
+				if err != nil {
+					log.Error("Unable to get raw transaction for", txh)
+					continue
+				}
+				heightTx = txRes.BlockHeight
 				break
-			}*/
+			}
+
+			if heightTx != 0 {
+				height = heightTx
+			}
 
 			action := "mined into block"
 			txAction := TxMined
@@ -146,10 +170,6 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 					}
 				}
 			}
-
-			// if len(recvStrings) > 0 && emailConf != nil {
-			// 	go sendEmailWatchRecv(strings.Join(recvStrings, "\n"), emailConf)
-			// }
 
 		case tx, ok := <-spyChans.relevantTxMempoolChan:
 			if !ok {
@@ -200,11 +220,6 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 			}
 
-			// if len(mempoolRecvMsgStrings) > 10 ||
-			// 	(mempoolRecvMsgStrings > 0 && mpEmailAge > time.Duration(2 * time.Second)) {
-			// 	go sendEmailWatchRecv(strings.Join(mempoolRecvMsgStrings, "\n"), emailConf)
-			// }
-
 		case <-quit:
 			mempoolLog.Debugf("Quitting OnRecvTx handler.")
 			return
@@ -242,9 +257,7 @@ func emailQueue(emailConf *emailConfig, wg *sync.WaitGroup, quit <-chan struct{}
 			msgStrings = append(msgStrings, msg)
 			lastMsgTime = time.Now()
 		case <-ticker.C:
-			numMessages := len(msgStrings)
-			sinceLast := time.Since(lastMsgTime)
-			if sinceLast > timeToWait(numMessages) {
+			if time.Since(lastMsgTime) > timeToWait(len(msgStrings)) {
 				go sendEmailWatchRecv(strings.Join(msgStrings, "\n"), emailConf)
 				msgStrings = nil
 			}
