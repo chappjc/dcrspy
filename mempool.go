@@ -97,7 +97,7 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 					continue
 				}
 
-				mempoolLog.Trace("New Tx: ", tx.Sha(), tx.MsgTx().TxIn[0].ValueIn)
+				mempoolLog.Trace("New Tx: ", tx.Hash(), tx.MsgTx().TxIn[0].ValueIn)
 
 				// See if the transaction is a ticket purchase.  If not, just
 				// make a note of it and go back to the loop.
@@ -113,24 +113,24 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 				switch txType {
 				case stake.TxTypeRegular:
 					// Regular Tx
-					mempoolLog.Tracef("Received regular transaction: %v", tx.Sha())
+					mempoolLog.Tracef("Received regular transaction: %v", tx.Hash())
 					continue
 				case stake.TxTypeSStx:
 					// Ticket purchase
-					ticketHash = tx.Sha()
+					ticketHash = tx.Hash()
 				case stake.TxTypeSSGen:
 					// Vote
 					ticketHash = &tx.MsgTx().TxIn[1].PreviousOutPoint.Hash
-					mempoolLog.Tracef("Received vote %v for ticket %v", tx.Sha(), ticketHash)
+					mempoolLog.Tracef("Received vote %v for ticket %v", tx.Hash(), ticketHash)
 					// TODO: Show subsidy for this vote (Vout[2] - Vin[1] ?)
 					continue
 				case stake.TxTypeSSRtx:
 					// Revoke
-					mempoolLog.Tracef("Received revoke transaction: %v", tx.Sha())
+					mempoolLog.Tracef("Received revoke transaction: %v", tx.Hash())
 					continue
 				default:
 					// Unknown
-					mempoolLog.Warnf("Received other transaction: %v", tx.Sha())
+					mempoolLog.Warnf("Received other transaction: %v", tx.Hash())
 					continue
 				}
 

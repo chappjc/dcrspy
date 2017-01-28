@@ -116,7 +116,8 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 	for acct := range accounts {
 		accountBalances[acct] = make(map[string]dcrutil.Amount)
 		for _, balType := range balTypes {
-			bal, err := wallet.GetBalanceMinConfType(acct, 0, balType)
+			// TODO: Finish this and redo all the balance type changes
+			bal, err := wallet.GetBalanceMinConf(acct, 0)
 			if err != nil {
 				return nil, err
 			}
@@ -192,7 +193,7 @@ func newBlockDataCollector(cfg *config,
 		mtx:          sync.Mutex{},
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
-	}, nil
+	}, nilSha
 }
 
 // collect is the main handler for collecting chain data
