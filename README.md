@@ -208,22 +208,22 @@ dcrspy is functional, but also a **work-in-progress**.  However, I will try to k
 
 * Verify Go installation:
 
-      go env GOROOT GOPATH
+        go env GOROOT GOPATH
 
 * Ensure $GOPATH/bin is on your $PATH
 * Install glide
 
-      go get -u -v github.com/Masterminds/glide
+        go get -u -v github.com/Masterminds/glide
 
 * Clone dcrspy repo
 
-      git clone https://github.com/chappjc/dcrspy.git $GOPATH/src/github.com/chappjc/dcrspy
+        git clone https://github.com/chappjc/dcrspy.git $GOPATH/src/github.com/chappjc/dcrspy
 
 * Glide install, and build executable
 
-      cd $GOPATH/src/github.com/chappjc/dcrspy
-      glide install
-      go install $(glide nv)
+        cd $GOPATH/src/github.com/chappjc/dcrspy
+        glide install
+        go install $(glide nv)
 
 * Find dcrspy executable in `$GOPATH/bin`, and copy elsewhere (recommended).
 
