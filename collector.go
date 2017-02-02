@@ -29,6 +29,7 @@ type WalletBalances struct {
 	LockedAllAccounts       float64 `json:"lockedallaccounts"`
 	LockedImportedAccount   float64 `json:"lockedimportedaccount"`
 	LockedDefaultAccount    float64 `json:"lockeddefaultaccount"`
+	ImmatureRewardsAllAcct  float64 `json:"immaturerewardsallaccounts"`
 }
 
 // stakeInfoData
@@ -37,7 +38,7 @@ type stakeInfoData struct {
 	walletInfo       *dcrjson.WalletInfoResult
 	stakeinfo        *dcrjson.GetStakeInfoResult
 	balances         *WalletBalances
-	accountBalances  *map[string]map[string]dcrutil.Amount
+	accountBalances  *map[string]dcrjson.GetAccountBalanceResult
 	priceWindowNum   int // trivia
 	idxBlockInWindow int // Relative block index within the difficulty period
 }
@@ -111,38 +112,43 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 		return nil, err
 	}
 
-	balTypes := []string{"all", "spendable", "locked"}
-	accountBalances := make(map[string]map[string]dcrutil.Amount)
+	// balTypes := []string{"total", "immature stakegen", "immature coinbase",
+	// 	"locked in tickets", "spendable", "voting authority"}
+	var totalAll, spendableAll, immatureAll, lockedAll float64
+	accountBalances := make(map[string]dcrjson.GetAccountBalanceResult)
 	for acct := range accounts {
-		accountBalances[acct] = make(map[string]dcrutil.Amount)
-		for _, balType := range balTypes {
-			// TODO: Finish this and redo all the balance type changes
-			bal, err := wallet.GetBalanceMinConf(acct, 0)
-			if err != nil {
-				return nil, err
-			}
-			accountBalances[acct][balType] = bal
+		bal, err := wallet.GetBalanceMinConf(acct, 0)
+		if err != nil {
+			return nil, err
 		}
+		if len(bal.Balances) == 0 {
+			return nil, errors.New("Balances length zero")
+		}
+		bRes := bal.Balances[0]
+		accountBalances[acct] = bRes
+
+		totalAll += bRes.Total
+		spendableAll += bRes.Spendable
+		immatureAll += bRes.ImmatureCoinbaseRewards +
+			bRes.ImmatureStakeGeneration
+		lockedAll += bRes.LockedByTickets
 	}
 
-	balAllAll, err := wallet.GetBalanceMinConfType("*", 0, "all")
-	balAllDefault := accountBalances["default"]["all"] // wallet.GetBalanceMinConfType("default", 0, "all")
+	balAllDefault := accountBalances["default"].Total
+	balSpendableDefault := accountBalances["default"].Spendable
 
-	balSpendableAll, err := wallet.GetBalance("*")
-	balSpendableDefault := accountBalances["default"]["spendable"] // wallet.GetBalance("default")
-
-	balLockedAll, err := wallet.GetBalanceMinConfType("*", 0, "locked")
-	balLockedDefault := accountBalances["default"]["locked"]   // wallet.GetBalanceMinConfType("default", 0, "locked")
-	balLockedImported := accountBalances["imported"]["locked"] // wallet.GetBalanceMinConfType("imported", 0, "locked")
+	balLockedDefault := accountBalances["default"].LockedByTickets
+	balLockedImported := accountBalances["imported"].LockedByTickets
 
 	balances := &WalletBalances{
-		AllAllAcounts:           balAllAll.ToCoin(),
-		AllDefaultAcount:        balAllDefault.ToCoin(),
-		SpendableAllAccounts:    balSpendableAll.ToCoin(),
-		SpendableDefaultAccount: balSpendableDefault.ToCoin(),
-		LockedAllAccounts:       balLockedAll.ToCoin(),
-		LockedImportedAccount:   balLockedImported.ToCoin(),
-		LockedDefaultAccount:    balLockedDefault.ToCoin(),
+		AllAllAcounts:           totalAll,
+		AllDefaultAcount:        balAllDefault,
+		SpendableAllAccounts:    spendableAll,
+		SpendableDefaultAccount: balSpendableDefault,
+		LockedAllAccounts:       lockedAll,
+		LockedImportedAccount:   balLockedImported,
+		LockedDefaultAccount:    balLockedDefault,
+		ImmatureRewardsAllAcct:  immatureAll,
 	}
 
 	// Output
@@ -193,7 +199,7 @@ func newBlockDataCollector(cfg *config,
 		mtx:          sync.Mutex{},
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
-	}, nilSha
+	}, nil
 }
 
 // collect is the main handler for collecting chain data

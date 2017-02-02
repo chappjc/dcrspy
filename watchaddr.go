@@ -90,7 +90,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 
 				for _, tx := range txs {
-					txHash := tx.Sha().String()
+					txHash := tx.Hash().String()
 					// Check the addresses associated with the PkScript of each TxOut
 					for outID, txOut := range tx.MsgTx().TxOut {
 						scriptClass, txAddrs, _, err :=
@@ -147,7 +147,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 
 			// TODO also make this function handle mined tx again, with a
 			// gettransaction to see if it's in a block
-			txHash := tx.Sha().String()
+			txHash := tx.Hash().String()
 
 			// Check the addresses associated with the PkScript of each TxOut
 			for _, txOut := range tx.MsgTx().TxOut {
@@ -227,7 +227,7 @@ func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 			}
 
 			log.Debugf("Transaction with watched address as previous outpoint (spending) %s. Hash: %v",
-				action, tx.Sha().String())
+				action, tx.Hash().String())
 
 			for _, txIn := range tx.MsgTx().TxIn {
 				prevOut := &txIn.PreviousOutPoint

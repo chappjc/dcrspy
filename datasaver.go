@@ -365,8 +365,8 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 		padding := strings.Repeat(" ", padWidth)
 		fmt.Printf("\tBalances (%s):%s%12.4f (any),%12.4f (spendable),%12.4f (locked)\n",
 			acct, padding,
-			balances["all"].ToCoin(), balances["spendable"].ToCoin(),
-			balances["locked"].ToCoin())
+			balances.Total, balances.Spendable,
+			balances.LockedByTickets)
 	}
 
 	fmt.Println("- Balances (by type)")

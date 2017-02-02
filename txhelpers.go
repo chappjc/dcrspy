@@ -25,7 +25,7 @@ func txhashInSlice(txs []*dcrutil.Tx, txHash *chainhash.Hash) *dcrutil.Tx {
 	}
 
 	for _, minedTx := range txs {
-		txSha := minedTx.Sha()
+		txSha := minedTx.Hash()
 		if txHash.IsEqual(txSha) {
 			return minedTx
 		}

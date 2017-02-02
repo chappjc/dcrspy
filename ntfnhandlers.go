@@ -30,7 +30,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 				log.Error("Failed to serialize blockHeader in new block notification.")
 			}
 			height := int32(blockHeader.Height)
-			hash := blockHeader.BlockSha()
+			hash := blockHeader.BlockHash()
 			select {
 			case spyChans.connectChan <- &hash:
 				// Past this point in this case is command execution. Block
