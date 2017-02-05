@@ -180,7 +180,6 @@ type blockData struct {
 	header           dcrjson.GetBlockHeaderVerboseResult
 	connections      int32
 	feeinfo          dcrjson.FeeInfoBlock
-	feeinfomempool   dcrjson.FeeInfoMempool
 	currentstakediff dcrjson.GetStakeDifficultyResult
 	eststakediff     dcrjson.EstimateStakeDiffResult
 	poolinfo         TicketPoolInfo
@@ -334,7 +333,6 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 		header:           blockHeaderResults,
 		connections:      info.Connections,
 		feeinfo:          feeInfoBlock,
-		feeinfomempool:   feeInfo.FeeInfoMempool,
 		currentstakediff: *stakeDiff,
 		eststakediff:     *estStakeDiff,
 		poolinfo:         ticketPoolInfo,

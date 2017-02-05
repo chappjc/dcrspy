@@ -645,7 +645,6 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	}
 	defer fp.Close()
 
-	mempoolLog.Debug("Writting all fees.")
 	j, err := json.MarshalIndent(struct {
 		N        int       `json:"n"`
 		AllFees  []float64 `json:"allfees"`
@@ -659,6 +658,7 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	if err != nil {
 		mempoolLog.Error("Write mempool ticket fees data to file: ", *fp)
 	}
+	mempoolLog.Debugf("All fees written to %s.", fname)
 
 	return err
 }
