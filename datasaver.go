@@ -222,6 +222,13 @@ func JSONFormatBlockData(data *blockData) (*bytes.Buffer, error) {
 	}
 	jsonAll.Write(feeInfoJSON)
 
+	jsonAll.WriteString(",\"ticketfeeinfo_mempool\": ")
+	feeInfoMempoolJSON, err := json.Marshal(data.feeinfomempool)
+	if err != nil {
+		return nil, err
+	}
+	jsonAll.Write(feeInfoMempoolJSON)
+
 	jsonAll.WriteString(",\"block_header\": ")
 	blockHeaderJSON, err := json.Marshal(data.header)
 	if err != nil {

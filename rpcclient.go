@@ -12,15 +12,16 @@ var requiredChainServerAPI = semver{major: 2, minor: 0, patch: 0}
 // When and RPC for wallet api version is available:
 //var requiredWalletAPI = semver{major: 2, minor: 0, patch: 0}
 
-func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
+func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	var dcrwCerts []byte
 	var err error
-	if !cfg.DisableClientTLS {
+	var walletVer semver
+	if !cfg.DisableWalletTLS {
 		dcrwCerts, err = ioutil.ReadFile(cfg.DcrwCert)
 		if err != nil {
 			log.Errorf("Failed to read dcrwallet cert file at %s: %s\n",
 				cfg.DcrwCert, err.Error())
-			return nil, err
+			return nil, walletVer, err
 		}
 	}
 
@@ -34,7 +35,7 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 		User:         cfg.DcrwUser,
 		Pass:         cfg.DcrwPass,
 		Certificates: dcrwCerts,
-		DisableTLS:   cfg.DisableClientTLS,
+		DisableTLS:   cfg.DisableWalletTLS,
 	}
 
 	ntfnHandlers := getWalletNtfnHandlers(cfg)
@@ -44,19 +45,33 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, error) {
 			" wanted to start with --nostakeinfo?\n", err.Error())
 		log.Errorf("Verify that rpc.cert is for your wallet:\n\t%v",
 			cfg.DcrwCert)
-		return nil, err
+		return nil, walletVer, err
 	}
 
-	// TODO: Ensure the wallet RPC server has a compatible API version.
+	// Ensure the wallet RPC server has a compatible API version.
+	ver, err := dcrwClient.Version()
+	if err != nil {
+		log.Error("Unable to get RPC version: ", err)
+		return nil, walletVer, fmt.Errorf("Unable to get node RPC version")
+	}
 
-	return dcrwClient, nil
+	dcrwVer := ver["dcrdjsonrpcapi"]
+	walletVer = semver{dcrwVer.Major, dcrwVer.Minor, dcrwVer.Patch}
+
+	if !semverCompatible(requiredChainServerAPI, walletVer) {
+		return nil, walletVer, fmt.Errorf("Node JSON-RPC server does not have "+
+			"a compatible API version. Advertises %v but require %v",
+			walletVer, requiredChainServerAPI)
+	}
+
+	return dcrwClient, walletVer, nil
 }
 
 func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	var dcrdCerts []byte
 	var err error
 	var nodeVer semver
-	if !cfg.DisableClientTLS {
+	if !cfg.DisableDaemonTLS {
 		dcrdCerts, err = ioutil.ReadFile(cfg.DcrdCert)
 		if err != nil {
 			log.Errorf("Failed to read dcrd cert file at %s: %s\n",
@@ -75,7 +90,7 @@ func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 		User:         cfg.DcrdUser,
 		Pass:         cfg.DcrdPass,
 		Certificates: dcrdCerts,
-		DisableTLS:   cfg.DisableClientTLS,
+		DisableTLS:   cfg.DisableDaemonTLS,
 	}
 
 	ntfnHandlers := getNodeNtfnHandlers(cfg)

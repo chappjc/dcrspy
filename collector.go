@@ -29,7 +29,8 @@ type WalletBalances struct {
 	LockedAllAccounts       float64 `json:"lockedallaccounts"`
 	LockedImportedAccount   float64 `json:"lockedimportedaccount"`
 	LockedDefaultAccount    float64 `json:"lockeddefaultaccount"`
-	ImmatureRewardsAllAcct  float64 `json:"immaturerewardsallaccounts"`
+	ImmatureVotesAllAcct    float64 `json:"immaturevotesallaccounts"`
+	ImmatureCoinbaseAllAcct float64 `json:"immaturecoinbaseallaccounts"`
 }
 
 // stakeInfoData
@@ -107,48 +108,48 @@ func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) 
 		return nil, err
 	}
 
-	accounts, err := wallet.ListAccounts()
+	// accounts, err := wallet.ListAccounts()
+	// if err != nil {
+	// 	return nil, err
+	// }
+
+	// balTypes := []string{"total", "immature stakegen", "immature coinbase",
+	// 	"locked in tickets", "spendable", "voting authority"}
+
+	acctBals, err := wallet.GetBalanceMinConf("*", 0)
 	if err != nil {
 		return nil, err
 	}
 
-	// balTypes := []string{"total", "immature stakegen", "immature coinbase",
-	// 	"locked in tickets", "spendable", "voting authority"}
-	var totalAll, spendableAll, immatureAll, lockedAll float64
-	accountBalances := make(map[string]dcrjson.GetAccountBalanceResult)
-	for acct := range accounts {
-		bal, err := wallet.GetBalanceMinConf(acct, 0)
-		if err != nil {
-			return nil, err
-		}
-		if len(bal.Balances) == 0 {
-			return nil, errors.New("Balances length zero")
-		}
-		bRes := bal.Balances[0]
-		accountBalances[acct] = bRes
+	var totals dcrjson.GetAccountBalanceResult
 
-		totalAll += bRes.Total
-		spendableAll += bRes.Spendable
-		immatureAll += bRes.ImmatureCoinbaseRewards +
-			bRes.ImmatureStakeGeneration
-		lockedAll += bRes.LockedByTickets
+	accountBalances := make(map[string]dcrjson.GetAccountBalanceResult)
+	for _, res := range acctBals.Balances {
+		accountBalances[res.AccountName] = res
+
+		totals.Total += res.Total
+		totals.Spendable += res.Spendable
+		totals.ImmatureStakeGeneration += res.ImmatureStakeGeneration
+		totals.ImmatureCoinbaseRewards += res.ImmatureCoinbaseRewards
+		totals.LockedByTickets += res.LockedByTickets
 	}
 
 	balAllDefault := accountBalances["default"].Total
 	balSpendableDefault := accountBalances["default"].Spendable
-
 	balLockedDefault := accountBalances["default"].LockedByTickets
+
 	balLockedImported := accountBalances["imported"].LockedByTickets
 
 	balances := &WalletBalances{
-		AllAllAcounts:           totalAll,
+		AllAllAcounts:           totals.Total,
 		AllDefaultAcount:        balAllDefault,
-		SpendableAllAccounts:    spendableAll,
+		SpendableAllAccounts:    totals.Spendable,
 		SpendableDefaultAccount: balSpendableDefault,
-		LockedAllAccounts:       lockedAll,
+		LockedAllAccounts:       totals.LockedByTickets,
 		LockedImportedAccount:   balLockedImported,
 		LockedDefaultAccount:    balLockedDefault,
-		ImmatureRewardsAllAcct:  immatureAll,
+		ImmatureVotesAllAcct:    totals.ImmatureStakeGeneration,
+		ImmatureCoinbaseAllAcct: totals.ImmatureCoinbaseRewards,
 	}
 
 	// Output
@@ -179,6 +180,7 @@ type blockData struct {
 	header           dcrjson.GetBlockHeaderVerboseResult
 	connections      int32
 	feeinfo          dcrjson.FeeInfoBlock
+	feeinfomempool   dcrjson.FeeInfoMempool
 	currentstakediff dcrjson.GetStakeDifficultyResult
 	eststakediff     dcrjson.EstimateStakeDiffResult
 	poolinfo         TicketPoolInfo
@@ -332,6 +334,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 		header:           blockHeaderResults,
 		connections:      info.Connections,
 		feeinfo:          feeInfoBlock,
+		feeinfomempool:   feeInfo.FeeInfoMempool,
 		currentstakediff: *stakeDiff,
 		eststakediff:     *estStakeDiff,
 		poolinfo:         ticketPoolInfo,

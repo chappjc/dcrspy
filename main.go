@@ -199,7 +199,10 @@ func mainCore() int {
 
 	var dcrwClient *dcrrpcclient.Client
 	if !cfg.NoCollectStakeInfo {
-		dcrwClient, err = connectWalletRPC(cfg)
+		var walletVer semver
+		dcrwClient, walletVer, err = connectWalletRPC(cfg)
+		log.Infof("Connected to dcrwallet (JSON-RPC API v%s)",
+			walletVer.String())
 	}
 
 	// Ctrl-C to shut down.
