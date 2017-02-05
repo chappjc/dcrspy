@@ -11,8 +11,10 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 )
@@ -356,43 +358,72 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 
 	fmt.Printf("\nWallet and Stake Info at Height %v:\n", data.height)
 
+	ab := *data.accountBalances
+
+	lenLongestAccount, largestAcctBal := 0, 0.0
+	for acct, balances := range ab {
+		if len(acct) > lenLongestAccount {
+			lenLongestAccount = len(acct)
+		}
+		if balances.Total > largestAcctBal {
+			largestAcctBal = balances.Total
+		}
+	}
+
+	numDecimals := 4
+	maxDigitsAccts := int(math.Floor(math.Log10(largestAcctBal)) + 1)
+	balFmtA := "%" + strconv.Itoa(maxDigitsAccts+numDecimals+2) + "." +
+		strconv.Itoa(numDecimals) + "f"
+
 	fmt.Println("- Balances (by account)")
-	for acct, balances := range *data.accountBalances {
-		padWidth := len("imported") - len(acct) + 5
+	for acct, balances := range ab {
+		padWidth := lenLongestAccount - len(acct) + 2
 		if padWidth < 0 {
 			padWidth = 0
 		}
 		padding := strings.Repeat(" ", padWidth)
-		fmt.Printf("\tBalances (%s):%s%12.4f (any),%12.4f (spendable),%12.4f (locked)\n",
+		fmt.Printf("  %s:%s"+balFmtA+" (any),"+balFmtA+" (spendable),"+balFmtA+
+			" (locked),"+balFmtA+" (immat.)\n",
 			acct, padding,
 			balances.Total, balances.Spendable,
-			balances.LockedByTickets)
+			balances.LockedByTickets,
+			balances.ImmatureCoinbaseRewards+balances.ImmatureStakeGeneration)
 	}
 
+	maxDigits := int(math.Floor(math.Log10(data.balances.AllAllAcounts)) + 1)
+	balFmt := "%" + strconv.Itoa(maxDigits+numDecimals+2) + "." +
+		strconv.Itoa(numDecimals) + "f"
+
 	fmt.Println("- Balances (by type)")
-	fmt.Printf("\tBalances (spendable):%12.4f (default),%12.4f (all)\n",
+	fmt.Printf("  spendable:   "+balFmt+" (default),"+balFmt+" (all)\n",
 		data.balances.SpendableDefaultAccount,
 		data.balances.SpendableAllAccounts)
-	fmt.Printf("\tBalances (locked):   %12.4f (default),%12.4f (all),%12.4f (imported)\n",
+	fmt.Printf("  locked:      "+balFmt+" (default),"+balFmt+" (all),%10.4f (imported)\n",
 		data.balances.LockedDefaultAccount,
 		data.balances.LockedAllAccounts,
 		data.balances.LockedImportedAccount)
-	fmt.Printf("\tBalances (any):      %12.4f (default),%12.4f (all)\n",
+	fmt.Printf("  im. coinbase:"+balFmt+" (default),"+balFmt+" (all)\n",
+		ab["default"].ImmatureCoinbaseRewards,
+		data.balances.ImmatureCoinbaseAllAcct)
+	fmt.Printf("  im. votes:   "+balFmt+" (default),"+balFmt+" (all)\n",
+		ab["default"].ImmatureStakeGeneration,
+		data.balances.ImmatureVotesAllAcct)
+	fmt.Printf("  any:         "+balFmt+" (default),"+balFmt+" (all)\n",
 		data.balances.AllDefaultAcount, data.balances.AllAllAcounts)
 
 	fmt.Println("- Stake Info")
 	fmt.Printf("        ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
 		data.walletInfo.StakeMining, data.walletInfo.Unlocked)
-	fmt.Printf("\tMined tickets:    %5d (immature), %7d (live)\n",
+	fmt.Printf("  Mined tickets:    %5d (immature), %7d (live)\n",
 		data.stakeinfo.Immature, data.stakeinfo.Live)
 
-	fmt.Printf("\tmempool tickets:  %5d (own),      %7d (all)\n",
+	fmt.Printf("  mempool tickets:  %5d (own),      %7d (all)\n",
 		data.stakeinfo.OwnMempoolTix, data.stakeinfo.AllMempoolTix)
 
-	fmt.Printf("\tTicket price:    %8.3f  |    Window progress: %3d / %3d\n",
+	fmt.Printf("  Ticket price:    %8.3f  |    Window progress: %3d / %3d\n",
 		data.stakeinfo.Difficulty, data.idxBlockInWindow, winSize)
 
-	fmt.Printf("\tWallet's price:  %10.05f;  fee:   %.4f / KiB\n",
+	fmt.Printf("  Wallet's price:  %10.05f;  fee:   %.4f / KiB\n",
 		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)
 
 	balanceSpendable := data.balances.SpendableAllAccounts
@@ -400,12 +431,12 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	// TODO: split Tx fee
 	splitTxFee := 0.05
 	ticketCost := ticketFee + data.stakeinfo.Difficulty + splitTxFee
-	fmt.Printf("\t    (Approximately %.1f tickets may be purchased with set fee.)\n",
+	fmt.Printf("     (Approximately %.1f tickets may be purchased with set fee.)\n",
 		balanceSpendable/ticketCost)
 
-	fmt.Printf("\tTotals: %10d  votes,  %9.2f subsidy\n",
+	fmt.Printf("  Totals: %10d  votes,  %9.2f subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
-	fmt.Printf("\t        %10d missed,  %9d revoked (%d expired)\n\n",
+	fmt.Printf("          %10d missed,  %9d revoked (%d expired)\n\n",
 		data.stakeinfo.Missed, data.stakeinfo.Revoked, data.stakeinfo.Expired)
 
 	return nil

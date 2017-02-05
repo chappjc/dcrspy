@@ -635,7 +635,8 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	}
 
 	// Write fees to a file with block height in the name
-	fname := fmt.Sprintf("%s%d-%d.json", s.nameBase, data.height, data.numTickets)
+	fname := fmt.Sprintf("%s%d-%d-%d.json", s.nameBase, data.height,
+		data.numTickets, time.Now().Unix())
 	//fname := fmt.Sprintf("%s.json", s.nameBase)
 	fullfile := filepath.Join(s.folder, fname)
 	fp, err := os.Create(fullfile)
@@ -652,7 +653,9 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	}{
 		len(data.minableFees.allFees),
 		data.minableFees.allFees,
-		time.Now().UTC().Format(time.RFC822)}, "", "    ")
+		time.Now().UTC().Format(time.RFC822)},
+		"", "    ")
+
 	s.file = *fp
 	_, err = fmt.Fprintln(&s.file, string(j))
 	if err != nil {
