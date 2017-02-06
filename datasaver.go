@@ -136,25 +136,25 @@ func (s *BlockDataToSummaryStdOut) Store(data *blockData) error {
 
 	fmt.Printf("\nBlock %v:\n", data.header.Height)
 
-	fmt.Printf("\tStake difficulty:                 %9.3f -> %.3f (current -> next block)\n",
+	fmt.Printf("  Stake difficulty:                 %9.3f -> %.3f (current -> next block)\n",
 		data.currentstakediff.CurrentStakeDifficulty,
 		data.currentstakediff.NextStakeDifficulty)
 
-	fmt.Printf("\tEstimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
+	fmt.Printf("  Estimated price in next window:   %9.3f / [%.2f, %.2f] ([min, max])\n",
 		data.eststakediff.Expected, data.eststakediff.Min, data.eststakediff.Max)
-	fmt.Printf("\tWindow progress:   %3d / %3d  of price window number %v\n",
+	fmt.Printf("  Window progress:   %3d / %3d in price window number %v\n",
 		data.idxBlockInWindow, winSize, data.priceWindowNum)
 
-	fmt.Printf("\tTicket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
+	fmt.Printf("  Ticket fees:  %.4f, %.4f, %.4f (mean, median, std), n=%d\n",
 		data.feeinfo.Mean, data.feeinfo.Median, data.feeinfo.StdDev,
 		data.feeinfo.Number)
 
 	if data.poolinfo.PoolValue >= 0 {
-		fmt.Printf("\tTicket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
+		fmt.Printf("  Ticket pool:  %v (size), %.3f (avg. price), %.2f (total DCR locked)\n",
 			data.poolinfo.PoolSize, data.poolinfo.PoolValAvg, data.poolinfo.PoolValue)
 	}
 
-	fmt.Printf("\tNode connections:  %d\n", data.connections)
+	fmt.Printf("  Node connections:  %d\n", data.connections)
 
 	return nil
 }
@@ -394,36 +394,37 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	balFmt := "%" + strconv.Itoa(maxDigits+numDecimals+2) + "." +
 		strconv.Itoa(numDecimals) + "f"
 
-	fmt.Println("- Balances (by type)")
-	fmt.Printf("  spendable:   "+balFmt+" (default),"+balFmt+" (all)\n",
+	fmt.Println("\n- Balances (by type)")
+	fmt.Printf("  spendable:      "+balFmt+" (default),"+balFmt+" (all)\n",
 		data.balances.SpendableDefaultAccount,
 		data.balances.SpendableAllAccounts)
-	fmt.Printf("  locked:      "+balFmt+" (default),"+balFmt+" (all),%10.4f (imported)\n",
+	fmt.Printf("  locked:         "+balFmt+" (default),"+balFmt+" (all),%10.4f (imported)\n",
 		data.balances.LockedDefaultAccount,
 		data.balances.LockedAllAccounts,
 		data.balances.LockedImportedAccount)
-	fmt.Printf("  im. coinbase:"+balFmt+" (default),"+balFmt+" (all)\n",
+	fmt.Printf("  immat. coinbase:"+balFmt+" (default),"+balFmt+" (all)\n",
 		ab["default"].ImmatureCoinbaseRewards,
 		data.balances.ImmatureCoinbaseAllAcct)
-	fmt.Printf("  im. votes:   "+balFmt+" (default),"+balFmt+" (all)\n",
+	fmt.Printf("  immat. votes:   "+balFmt+" (default),"+balFmt+" (all)\n",
 		ab["default"].ImmatureStakeGeneration,
 		data.balances.ImmatureVotesAllAcct)
-	fmt.Printf("  any:         "+balFmt+" (default),"+balFmt+" (all)\n",
+	fmt.Printf("  any:            "+balFmt+" (default),"+balFmt+" (all)\n\n",
 		data.balances.AllDefaultAcount, data.balances.AllAllAcounts)
 
-	fmt.Println("- Stake Info")
-	fmt.Printf("        ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
-		data.walletInfo.StakeMining, data.walletInfo.Unlocked)
-	fmt.Printf("  Mined tickets:    %5d (immature), %7d (live)\n",
+	fmt.Println("- Stake Info:")
+	fmt.Printf("  Mined tickets:   %4d (immature),%5d (live)\n",
 		data.stakeinfo.Immature, data.stakeinfo.Live)
 
-	fmt.Printf("  mempool tickets:  %5d (own),      %7d (all)\n",
+	fmt.Printf("  mempool tickets: %4d (own),     %5d (everyone)\n\n",
 		data.stakeinfo.OwnMempoolTix, data.stakeinfo.AllMempoolTix)
 
-	fmt.Printf("  Ticket price:    %8.3f  |    Window progress: %3d / %3d\n",
+	fmt.Printf("      ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
+		data.walletInfo.StakeMining, data.walletInfo.Unlocked)
+
+	fmt.Printf("  Ticket price: %8.3f   |  Window progress: %3d / %3d\n",
 		data.stakeinfo.Difficulty, data.idxBlockInWindow, winSize)
 
-	fmt.Printf("  Wallet's price:  %10.05f;  fee:   %.4f / KiB\n",
+	fmt.Printf("  Your limit: %11.05f;    Fee:   %.4f DCR / KB\n",
 		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)
 
 	balanceSpendable := data.balances.SpendableAllAccounts
@@ -431,12 +432,12 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	// TODO: split Tx fee
 	splitTxFee := 0.05
 	ticketCost := ticketFee + data.stakeinfo.Difficulty + splitTxFee
-	fmt.Printf("     (Approximately %.1f tickets may be purchased with set fee.)\n",
+	fmt.Printf("     (Approximately %.1f tickets may be purchased with set fee.)\n\n",
 		balanceSpendable/ticketCost)
 
-	fmt.Printf("  Totals: %10d  votes,  %9.2f subsidy\n",
+	fmt.Printf("  Totals: %8d  votes, %9.2f subsidy\n",
 		data.stakeinfo.Voted, data.stakeinfo.TotalSubsidy)
-	fmt.Printf("          %10d missed,  %9d revoked (%d expired)\n\n",
+	fmt.Printf("          %8d missed, %9d revoked (%d expired)\n\n",
 		data.stakeinfo.Missed, data.stakeinfo.Revoked, data.stakeinfo.Expired)
 
 	return nil
