@@ -3,7 +3,8 @@
 <!--- #[![release version](https://badge.fury.io/gh/chappjc%2Fdcrspy.svg)](https://badge.fury.io/gh/chappjc%2Fdcrspy) -->
 [![Build Status](http://img.shields.io/travis/chappjc/dcrspy.svg)](https://travis-ci.org/chappjc/dcrspy)
 [![GitHub release](https://img.shields.io/github/release/chappjc/dcrspy.svg)](https://github.com/chappjc/dcrspy/releases)
-[![Latest tag](https://img.shields.io/github/tag/chappjc/dcrspy.svg)
+[![Latest tag](https://img.shields.io/github/tag/chappjc/dcrspy.svg)](https://github.com/chappjc/dcrspy/tags)
+[![AUR](https://img.shields.io/aur/version/dcrspy.svg)](https://aur.archlinux.org/packages/dcrspy/)
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 
 dcrspy is a program to continuously monitor and log changes in various data on
