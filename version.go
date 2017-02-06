@@ -10,8 +10,8 @@ type version struct {
 
 var ver = version{
 	Major: 0,
-	Minor: 8,
-	Patch: 0,
+	Minor: 7,
+	Patch: 4,
 	Label: "beta",
 	Nick:  "Fletch Lives"}
 

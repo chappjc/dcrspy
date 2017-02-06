@@ -5,7 +5,7 @@
 //
 // Types of information monitored:
 //	1. Block chain data (from dcrd)
-//  2. Stake information (from your wallet)
+//  2. Wallet and stake information (from dcrwallet)
 //  3. mempool (from dcrd)
 //
 // See README.md and TODO for more information.
@@ -25,6 +25,7 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
@@ -33,7 +34,6 @@ import (
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
-	"runtime/pprof"
 )
 
 const (
