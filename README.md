@@ -6,12 +6,13 @@
 [![Latest tag](https://img.shields.io/github/tag/chappjc/dcrspy.svg)
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
 
-dcrspy is a program to continuously monitor and log changes in various data
-on the Decred network.  It works by connecting to both dcrd and dcrwallet
-and responding to varioius event detected on the network via [notifiers registered with
-dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the [Decred JSON-RPC API][2].
+dcrspy is a program to continuously monitor and log changes in various data on
+the Decred network.  It works by connecting to both dcrd and dcrwallet and
+responding to varioius event detected on the network via [notifiers registered
+with dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the
+[Decred JSON-RPC API][2].
 
-***Compatibility Notices***
+## Compatibility Notices
 
 * After Decred (i.e. dcrwallet and dcrd) v0.6.0, the notifications API was
 changed, requiring dcrspy to update it's notification handlers.  Practically,
@@ -23,8 +24,8 @@ any Decred release *after* 0.6.0 use *at least* dcrspy v0.7.0, preferably
 [latest](https://github.com/chappjc/dcrspy/releases), or master. The version of
 dcrspy on master will use the new `version` RPC to check that the RPC server has
 a compatible API version.
-* After Decred v0.7.0, the getbalance RPC response was changed. For 
-Decred release 0.8.0 and builds of using dcrd commit
+* After Decred v0.7.0, the getbalance RPC response was changed. For Decred
+release 0.8.0 and builds of using dcrd commit
 [`f5c0b7e`](https://github.com/decred/dcrd/commit/f5c0b7eff2f9336a01a31a344a0bdb1572403e06)
 and later, it is necessary to use at least v0.8.0 of dcrspy.
 
@@ -58,28 +59,36 @@ Details of the JSON output may be found in [Data Details](#data-details).  The
 plain text summary looks something like the following (_wallet data simulated_):
 
 ~~~none
-Block 35561:
-        Stake difficulty:                    22.663 -> 22.663 (current -> next block)
-        Estimated price in next window:      25.279 / [24.63, 26.68] ([min, max])
-        Window progress:   138 / 144  of price window number 246
-        Ticket fees:  0.0101, 0.0101, 0.0000 (mean, median, std), n=1
-        Ticket pool:  42048 (size), 17.721 (avg. price), 745115.63 (total DCR locked)
-        Node connections: 49
+Block 105001:
+  Stake difficulty:                   119.385 -> 119.385 (current -> next block)
+  Estimated price in next window:      79.021 / [79.02, 315.71] ([min, max])
+  Window progress:    26 / 144 in price window number 729
+  Ticket fees:  0.0000, 0.0000, 0.0000 (mean, median, std), n=0
+  Node connections:  8
 
-Wallet and Stake Info at Height 35561:
-- Balances
-        Balances (spendable):     0.0000 (default),    0.0000 (all)
-        Balances (locked):      xxx.xxxx (default), xxxx.xxxx (all), xxxx.xxxx (imported)
-        Balances (any):        xxxx.xxxx (default), xxxx.xxxx (all)
-- Stake Info
-        ===>  Mining enabled: true;  Unlocked: true  <===
-        Mined tickets:        4 (immature),     43 (live)
-        mempool tickets:      0 (own),            6 (all)
-        Ticket price:      22.663  |    Window progress: 138 / 144
-        Wallet's price:     23.8100;  fee:   0.1940 / KiB
-          (Approximately N tickets may be purchased with the set fee.)
-        Totals:        541  votes,     919.84 subsidy
-                         1 missed,          1 revoked
+Wallet and Stake Info at Height 105001:
+- Balances (by account)
+  imported:   1234.5678 (any),    0.0000 (spendable), 1234.5678 (locked),    0.0000 (immat.)
+  default:    4321.4321 (any), 3210.4000 (spendable),    0.0000 (locked), 1111.0321 (immat.)
+
+- Balances (by type)
+  spendable:        3210.4000 (default),  3210.4000 (all)
+  locked:              0.0000 (default),  1234.5678 (all), 1234.5678 (imported)
+  immat. coinbase:     0.0000 (default),     0.0000 (all)
+  immat. votes:     1111.0321 (default),  1111.0321 (all)
+  any:              4321.4321 (default),  5555.9999 (all)
+
+- Stake Info:
+  Mined tickets:     12 (immature),   57 (live)
+  mempool tickets:    5 (own),       544 (everyone)
+
+      ===>  Mining enabled: false;  Unlocked: false  <===
+  Ticket price:  119.385   |  Window progress:  26 / 144
+  Your limit:   1337.00000;    Fee:   0.0470 DCR / KB
+     (Approximately 26.7 tickets may be purchased with set fee.)
+
+  Totals:      404  votes,    697.47 subsidy
+                 3 missed,         3 revoked (2 expired)
 ~~~
 
 Note: Ticket pool value takes up to 10 seconds to compute, so by default it is
@@ -201,13 +210,17 @@ dcrspy is functional, but also a **work-in-progress**.  However, I will try to k
 
 ## Requirements
 
-* [Go](http://golang.org) 1.6 or newer.
+* [Go](http://golang.org) 1.7 or newer.
 * Running `dcrd` synchronized to the current best block on the network.
 * (Optional, for stake info) `dcrwallet` connected to `dcrd`.
+
+Verify that the versions according to the [compatibility notices](#compatibility-notices) above.
 
 ## Installation
 
 ### Build from Source
+
+The following instructions assume a Unix-like shell (e.g. bash).
 
 * [Install Go](http://golang.org/doc/install)
 
@@ -260,8 +273,10 @@ There are several program options, which may be utilized via:
 Quick tips:
 
 * Get a quick summary and exit, with `-e, --nomonitor`.
+* Enable mempool info with `-m, --mempool`.
+* Dump all mempool ticket fees to file with `--dumpallmptix`.
 * Stay connected and monitor for new blocks, writting:
-  * Plain text summary to stdout, with `-s, --summary`.
+  * Plain text summary to stdout, with `-s, --summary` (default.)
   * JSON to stdout, with `-o, --save-jsonstdout`.
   * JSON to file system, with `-j, --save-jsonfile`.
 * To monitor only block data (no wallet connection), use `--nostakeinfo`.
@@ -355,7 +370,10 @@ mempool=true
 ;mp-ticket-trigger=4
 ; Show the ticket fee at the limit of mineability (20th or highest), plus show
 ; windows of fees above and below this limit within the specified radius.
-;feewinradius=7
+;feewinradius=20
+; Dump the prices of all tickets in mempool to disk each time it is reported
+; to stdout according to the settings above. JSON formatted output.
+;dumpallmptix=1
 
 ; Addresses to watch for incoming transactions
 ; Decred developer (C0) address
@@ -392,22 +410,25 @@ dcrdpass=asdfExample
 
 dcrdserv=localhost:9109
 dcrdcert=/home/me/.dcrd/rpc.cert
+;nodaemontls=1
 
 dcrwuser=wuser
 dcrwpass=qwertyExample
 
 dcrwserv=localhost:9110
 dcrwcert=/home/me/.dcrwallet/rpc.cert
+;nowallettls=1
 
 ;noclienttls=false
 ~~~
 
 ## Data Details
 
-Block chain data obtained from dcrd includes several types of data.  The JSON
-file written by dcrspy for block data is named `block-data-[BLOCKNUM].json`. It
-contains a single JSON object, with each data type as a tagged JSON child
-object.
+Block chain data obtained from dcrd includes several types of data.  Most of the
+information is written to stdout in a plaintext summary format. Optionally, the
+data may be written to disk in JSON format.  The JSON file written by dcrspy for
+block data is named `block-data-[BLOCKNUM].json`. It contains a single JSON
+object, with each data type as a tagged JSON child object.
 
 1. Block header (hash, voters, height, difficulty, nonce, time, etc.)
 
