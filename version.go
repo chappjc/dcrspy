@@ -13,7 +13,7 @@ var ver = version{
 	Minor: 8,
 	Patch: 0,
 	Label: "beta",
-	Nick:  "Fletch Lives"}
+	Nick:  "Austin Powers"}
 
 // CommitHash may be set on the build command line:
 // go build -ldflags "-X main.CommitHash=`git rev-parse --short HEAD`"

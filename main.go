@@ -10,7 +10,7 @@
 //
 // See README.md and TODO for more information.
 //
-// Copyright (c) 2016, Jonathan Chappelow
+// Copyright (c) 2017, Jonathan Chappelow
 // See LICENSE for details.
 //
 // Borrowing logging and config file facilities, plus much boilerplate from

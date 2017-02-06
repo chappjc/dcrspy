@@ -3,56 +3,59 @@
 <!--- #[![release version](https://badge.fury.io/gh/chappjc%2Fdcrspy.svg)](https://badge.fury.io/gh/chappjc%2Fdcrspy) -->
 [![Build Status](http://img.shields.io/travis/chappjc/dcrspy.svg)](https://travis-ci.org/chappjc/dcrspy)
 [![GitHub release](https://img.shields.io/github/release/chappjc/dcrspy.svg)](https://github.com/chappjc/dcrspy/releases)
+[![Latest tag](https://img.shields.io/github/tag/chappjc/dcrspy.svg)
 [![ISC License](http://img.shields.io/badge/license-ISC-blue.svg)](http://copyfree.org)
-[![Gitter](https://badges.gitter.im/chappjc/dcrspy.svg)](https://gitter.im/chappjc/dcrspy?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge)
 
 dcrspy is a program to continuously monitor and log changes in various data
 on the Decred network.  It works by connecting to both dcrd and dcrwallet
-and responding when a new block is detected via a [notifier registered with
+and responding to varioius event detected on the network via [notifiers registered with
 dcrd over a websocket][1].  Communication with dcrd and dcrwallet uses the [Decred JSON-RPC API][2].
 
-***Compatibility Notice*** - After Decred (i.e. dcrwallet and dcrd) version
-0.6.0, the notifications API was changed, requiring dcrspy to update it's
-notification handlers.  Practically, this means that for version 0.6.0 and
-earlier of Decred it is required to use the [compatibility release
+***Compatibility Notices***
+
+* After Decred (i.e. dcrwallet and dcrd) v0.6.0, the notifications API was
+changed, requiring dcrspy to update it's notification handlers.  Practically,
+this means that for version 0.6.0 and earlier of Decred it is required to use
+the [compatibility release
 "Millbarge"](https://github.com/chappjc/dcrspy/releases/tag/v0.6.0) or the
 [old-ntfns branch](https://github.com/chappjc/dcrspy/tree/old-ntfns), and for
 any Decred release *after* 0.6.0 use *at least* dcrspy v0.7.0, preferably
 [latest](https://github.com/chappjc/dcrspy/releases), or master. The version of
 dcrspy on master will use the new `version` RPC to check that the RPC server has
 a compatible API version.
+* After Decred v0.7.0, the getbalance RPC response was changed. For 
+Decred release 0.8.0 and builds of using dcrd commit
+[`f5c0b7e`](https://github.com/decred/dcrd/commit/f5c0b7eff2f9336a01a31a344a0bdb1572403e06)
+and later, it is necessary to use at least v0.8.0 of dcrspy.
 
 ## Types of Data
 
 The types of information monitored are:
 
-* Block chain data (from dcrd)
-* Stake and wallet information (from your wallet, optional).
-* Mempool ticket info (from dcrd)
+* Block chain (from dcrd)
+* Stake and wallet (from your wallet, optional).
+* Mempool, including ticket fees and transactions of interest (from dcrd)
 
-A connection to dcrwallet is optional. Only block data will be obtained when no
-wallet connection is available.
-
+A connection to dcrwallet is optional, but required for stake info and balances.
 See [Data Details](#data-details) below for more information.
 
-Transactions involving **watched addresses** may also be logged (using the
-`watchaddress` flag).  Watching for addresses receiving funds seems to be OK,
-but watching for sending funds from a watched address is experimental.
+Transactions sending to **watched addresses** may be reported (using the
+`watchaddress` flag).
 
 ## Output
 
 Multiple destinations for the data are planned:
 
-1. **stdout**.  JSON-formatted data is send to stdout. **DONE**.
-1. **File system**.  JSON-formatted data is written to the file system. **DONE**.
-1. **Database**. Data is inserted into a MySQL database. NOT IMPLEMENTED.
 1. **Plain text summary**: balances, votes, current ticket price, mean fees,
    wallet status. **DONE**.
-1. **RESTful API** over HTTPS. IN PROGRESS.
+1. **JSON (stdout)**.  JSON-formatted data is send to stdout. **DONE**.
+1. **File system**.  JSON-formatted data is written to the file system. **DONE**.
 1. **email**: email notification upon receiving to a watched address. **DONE**.
+1. **Database**. Data is inserted into a MySQL or MongoDB database.
+1. **RESTful API**.
 
 Details of the JSON output may be found in [Data Details](#data-details).  The
-plain text summary looks something like the following (_wallet data redacted_):
+plain text summary looks something like the following (_wallet data simulated_):
 
 ~~~none
 Block 35561:
@@ -61,6 +64,7 @@ Block 35561:
         Window progress:   138 / 144  of price window number 246
         Ticket fees:  0.0101, 0.0101, 0.0000 (mean, median, std), n=1
         Ticket pool:  42048 (size), 17.721 (avg. price), 745115.63 (total DCR locked)
+        Node connections: 49
 
 Wallet and Stake Info at Height 35561:
 - Balances
@@ -73,6 +77,7 @@ Wallet and Stake Info at Height 35561:
         mempool tickets:      0 (own),            6 (all)
         Ticket price:      22.663  |    Window progress: 138 / 144
         Wallet's price:     23.8100;  fee:   0.1940 / KiB
+          (Approximately N tickets may be purchased with the set fee.)
         Totals:        541  votes,     919.84 subsidy
                          1 missed,          1 revoked
 ~~~
@@ -233,7 +238,7 @@ folders.
 
 ## Updating
 
-First, update the repository:
+First, update the repository (assuming you have `master` checked out):
 
     cd $GOPATH/src/github.com/chappjc/dcrspy
     git pull
@@ -270,21 +275,27 @@ Usage:
   dcrspy [OPTIONS]
 
 Application Options:
-  -C, --configfile=        Path to configuration file (./dcrspy-testnet.conf)
+  -C, --configfile=        Path to configuration file (./dcrspy.conf)
   -V, --version            Display version information and exit
       --testnet            Use the test network (default mainnet)
       --simnet             Use the simulation test network (default mainnet)
   -d, --debuglevel=        Logging level {trace, debug, info, warn, error, critical} (info)
   -q, --quiet              Easy way to set debuglevel to error
       --logdir=            Directory to log output (./logs)
+      --cpuprofile=        File for CPU profiling.
   -c, --cmdname=           Command name to run. Must be on %PATH%.
-  -a, --cmdargs=           Comma-separated list of arguments for command to run. The specifier %n is substituted for block height at execution, and %h is
-                           substituted for block hash.
+  -a, --cmdargs=           Comma-separated list of arguments for command to run. The specifier %n
+                           is substituted for block height at execution, and %h is substituted for
+                           block hash.
   -e, --nomonitor          Do not launch monitors. Display current data and (e)xit.
-  -m, --mempool            Monitor mempool for new transactions, and report ticketfee info when new tickets are added.
-      --mp-min-interval=   The minimum time in seconds between mempool reports, regarless of number of new tickets seen. (4)
-      --mp-max-interval=   The maximum time in seconds between mempool reports (within a couple seconds), regarless of number of new tickets seen. (120)
-      --mp-ticket-trigger= The number minimum number of new tickets that must be seen to trigger a new mempool report. (4)
+  -m, --mempool            Monitor mempool for new transactions, and report ticketfee info when new
+                           tickets are added.
+      --mp-min-interval=   The minimum time in seconds between mempool reports, regarless of number
+                           of new tickets seen. (4)
+      --mp-max-interval=   The maximum time in seconds between mempool reports (within a couple
+                           seconds), regarless of number of new tickets seen. (120)
+      --mp-ticket-trigger= The number minimum number of new tickets that must be seen to trigger a
+                           new mempool report. (4)
   -r, --feewinradius=      Half-width of a window around the ticket with the lowest mineable fee.
       --dumpallmptix       Dump to file the fees of all the tickets in mempool.
       --noblockdata        Do not collect block data (default false)
@@ -295,22 +306,27 @@ Application Options:
       --smtppass=          SMTP password
       --smtpserver=        SMTP host name
       --emailaddr=         Destination email address for alerts
-      --emailsubj=         Email subject. (default "dcrspy transaction notification") (dcrspy tx notification)
+      --emailsubj=         Email subject. (default "dcrspy transaction notification") (dcrspy
+                           transaction notification)
   -s, --summary            Write plain text summary of key data to stdout
   -o, --save-jsonstdout    Save JSON-formatted data to stdout
   -j, --save-jsonfile      Save JSON-formatted data to file
   -f, --outfolder=         Folder for file outputs (./spydata)
       --dcrduser=          Daemon RPC user name
       --dcrdpass=          Daemon RPC password
-      --dcrdserv=          Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet:
-                           localhost:19556)
+      --dcrdserv=          Hostname/IP and port of dcrd RPC server to connect to (default
+                           localhost:9109, testnet: localhost:19109, simnet: localhost:19556)
       --dcrdcert=          File containing the dcrd certificate file (~/.dcrd/rpc.cert)
+      --nodaemontls        Disable TLS for the daemon RPC client -- NOTE: This is only allowed if
+                           the RPC client is connecting to localhost
       --dcrwuser=          Wallet RPC user name
       --dcrwpass=          Wallet RPC password
-      --dcrwserv=          Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet:
-                           localhost:19557)
-      --dcrwcert=          File containing the dcrwallet certificate file (~/.dcrwallet/rpc.cert)
-      --noclienttls        Disable TLS for the RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost
+      --dcrwserv=          Hostname/IP and port of dcrwallet RPC server to connect to (default
+                           localhost:9110, testnet: localhost:19110, simnet: localhost:19557)
+      --dcrwcert=          File containing the dcrwallet certificate file
+                           (~/.dcrwallet/rpc.cert)
+      --nowallettls        Disable TLS for the wallet RPC client -- NOTE: This is only allowed if
+                           the RPC client is connecting to localhost
 
 Help Options:
   -h, --help               Show this help message
@@ -333,7 +349,7 @@ debuglevel=debug
 ;cmdargs="127.0.0.1,-n,8"
 
 ; Monitor mempool for new tickets, displaying fees
-;mempool=true
+mempool=true
 ;mp-min-interval=4
 ;mp-max-interval=120
 ;mp-ticket-trigger=4

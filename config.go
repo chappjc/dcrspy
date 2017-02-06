@@ -105,12 +105,12 @@ type config struct {
 	DcrdPass         string `long:"dcrdpass" description:"Daemon RPC password"`
 	DcrdServ         string `long:"dcrdserv" description:"Hostname/IP and port of dcrd RPC server to connect to (default localhost:9109, testnet: localhost:19109, simnet: localhost:19556)"`
 	DcrdCert         string `long:"dcrdcert" description:"File containing the dcrd certificate file"`
+	DisableDaemonTLS bool   `long:"nodaemontls" description:"Disable TLS for the daemon RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
 	DcrwUser         string `long:"dcrwuser" description:"Wallet RPC user name"`
 	DcrwPass         string `long:"dcrwpass" description:"Wallet RPC password"`
 	DcrwServ         string `long:"dcrwserv" description:"Hostname/IP and port of dcrwallet RPC server to connect to (default localhost:9110, testnet: localhost:19110, simnet: localhost:19557)"`
 	DcrwCert         string `long:"dcrwcert" description:"File containing the dcrwallet certificate file"`
 	DisableWalletTLS bool   `long:"nowallettls" description:"Disable TLS for the wallet RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
-	DisableDaemonTLS bool   `long:"nodaemontls" description:"Disable TLS for the daemon RPC client -- NOTE: This is only allowed if the RPC client is connecting to localhost"`
 
 	// TODO
 	//AccountName   string `long:"accountname" description:"Account name (other than default or imported) for which balances should be listed."`
