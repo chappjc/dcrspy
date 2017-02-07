@@ -83,8 +83,6 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			}
 			txHeight := uint32(bestBlock)
 
-			p.mtx.Lock()
-
 			// See if this was just the ticker firing
 			if s.IsEqual(new(chainhash.Hash)) {
 				// Just the ticker
@@ -144,6 +142,8 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 
 				// TODO: Get fee for this ticket (Vin[0] - Vout[0])
 			}
+
+			p.mtx.Lock()
 
 			// s.server.txMemPool.TxDescs()
 			ticketHashes, err := client.GetRawMempool(dcrjson.GRMTickets)
