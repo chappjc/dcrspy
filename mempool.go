@@ -83,6 +83,8 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			}
 			txHeight := uint32(bestBlock)
 
+			p.mtx.Lock()
+
 			// See if this was just the ticker firing
 			if s.IsEqual(new(chainhash.Hash)) {
 				// Just the ticker
@@ -123,7 +125,7 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 				case stake.TxTypeSSGen:
 					// Vote
 					ticketHash = &tx.MsgTx().TxIn[1].PreviousOutPoint.Hash
-					mempoolLog.Debugf("Received vote %v for ticket %v", tx.Hash(), ticketHash)
+					mempoolLog.Tracef("Received vote %v for ticket %v", tx.Hash(), ticketHash)
 					// TODO: Show subsidy for this vote (Vout[2] - Vin[1] ?)
 					// No continue statement so we can proceed if first of block
 					if txHeight <= p.mpoolInfo.currentHeight {
@@ -144,7 +146,6 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			}
 
 			// s.server.txMemPool.TxDescs()
-			p.mtx.Lock()
 			ticketHashes, err := client.GetRawMempool(dcrjson.GRMTickets)
 			if err != nil {
 				mempoolLog.Errorf("Could not get raw mempool: %v", err.Error())
