@@ -44,9 +44,9 @@ type mempoolMonitor struct {
 func newMempoolMonitor(collector *mempoolDataCollector,
 	savers []MempoolDataSaver,
 	quit chan struct{}, wg *sync.WaitGroup, newTicketLimit int32,
-	mini time.Duration, maxi time.Duration) *mempoolMonitor {
+	mini time.Duration, maxi time.Duration, mpi *mempoolInfo) *mempoolMonitor {
 	return &mempoolMonitor{
-		mpoolInfo:      mempoolInfo{}, // defaults OK here?
+		mpoolInfo:      *mpi,
 		newTicketLimit: newTicketLimit,
 		minInterval:    mini,
 		maxInterval:    maxi,
@@ -74,19 +74,18 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			}
 
 			var err error
-			var txHeight uint32
 			// oneTicket is 0 for a Ticker event or 1 for a ticket purchase Tx.
 			var oneTicket int32
+			bestBlock, err := client.GetBlockCount()
+			if err != nil {
+				mempoolLog.Error("Unable to get block count")
+				continue
+			}
+			txHeight := uint32(bestBlock)
 
 			// See if this was just the ticker firing
 			if s.IsEqual(new(chainhash.Hash)) {
 				// Just the ticker
-				bestBlock, err := client.GetBlockCount()
-				if err != nil {
-					mempoolLog.Error("Unable to get block count")
-					continue
-				}
-				txHeight = uint32(bestBlock)
 				// proceed in case it has been quiteLong
 			} else {
 				// OnTxAccepted probably sent on newTxChan
@@ -120,12 +119,17 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 					price := tx.MsgTx().TxOut[0].Value
 					mempoolLog.Tracef("Received ticket purchase %v, price %v",
 						ticketHash, dcrutil.Amount(price).ToCoin())
+					// txHeight = tx.MsgTx().TxIn[0].BlockHeight // uh, no
 				case stake.TxTypeSSGen:
 					// Vote
 					ticketHash = &tx.MsgTx().TxIn[1].PreviousOutPoint.Hash
 					mempoolLog.Debugf("Received vote %v for ticket %v", tx.Hash(), ticketHash)
 					// TODO: Show subsidy for this vote (Vout[2] - Vin[1] ?)
 					// No continue statement so we can proceed if first of block
+					if txHeight <= p.mpoolInfo.currentHeight {
+						continue
+					}
+					mempoolLog.Debugf("Vote in new block triggering mempool data collection")
 				case stake.TxTypeSSRtx:
 					// Revoke
 					mempoolLog.Tracef("Received revoke transaction: %v", tx.Hash())
@@ -137,7 +141,6 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 				}
 
 				// TODO: Get fee for this ticket (Vin[0] - Vout[0])
-				txHeight = tx.MsgTx().TxIn[0].BlockHeight
 			}
 
 			// s.server.txMemPool.TxDescs()

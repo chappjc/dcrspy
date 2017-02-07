@@ -352,26 +352,32 @@ func mainCore() int {
 			return 13
 		}
 
-		// mempoolInfo, err := mpoolCollector.collect()
-		// if err != nil {
-		// 	fmt.Printf("Mempool info collection failed while gathering initial"+
-		// 		"data: %v", err.Error())
-		// 	return 14
-		// }
+		mpData, err := mpoolCollector.collect()
+		if err != nil {
+			fmt.Printf("Mempool info collection failed while gathering initial"+
+				"data: %v", err.Error())
+			return 14
+		}
 
-		// if err := summarySaverMempool.Store(mempoolInfo); err != nil {
-		// 	fmt.Printf("Failed to print initial mempool info summary: %v",
-		// 		err.Error())
-		// 	return 15
-		// }
+		if err := summarySaverMempool.Store(mpData); err != nil {
+			fmt.Printf("Failed to print initial mempool info summary: %v",
+				err.Error())
+			return 15
+		}
 
 		newTicketLimit := int32(cfg.MPTriggerTickets)
 		mini := time.Duration(cfg.MempoolMinInterval) * time.Second
 		maxi := time.Duration(cfg.MempoolMaxInterval) * time.Second
 
 		wg.Add(1)
+		mpi := &mempoolInfo{
+			currentHeight:               mpData.height,
+			numTicketPurchasesInMempool: mpData.numTickets,
+			numTicketsSinceStatsReport:  0,
+			lastCollectTime:             time.Now(),
+		}
 		mpm := newMempoolMonitor(mpoolCollector, mempoolSavers,
-			quit, &wg, newTicketLimit, mini, maxi)
+			quit, &wg, newTicketLimit, mini, maxi, mpi)
 		go mpm.txHandler(dcrdClient)
 
 		spyChans.txTicker = time.NewTicker(time.Second * 2)
