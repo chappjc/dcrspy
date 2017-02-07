@@ -352,18 +352,18 @@ func mainCore() int {
 			return 13
 		}
 
-		mempoolInfo, err := mpoolCollector.collect()
-		if err != nil {
-			fmt.Printf("Mempool info collection failed while gathering initial"+
-				"data: %v", err.Error())
-			return 14
-		}
+		// mempoolInfo, err := mpoolCollector.collect()
+		// if err != nil {
+		// 	fmt.Printf("Mempool info collection failed while gathering initial"+
+		// 		"data: %v", err.Error())
+		// 	return 14
+		// }
 
-		if err := summarySaverMempool.Store(mempoolInfo); err != nil {
-			fmt.Printf("Failed to print initial mempool info summary: %v",
-				err.Error())
-			return 15
-		}
+		// if err := summarySaverMempool.Store(mempoolInfo); err != nil {
+		// 	fmt.Printf("Failed to print initial mempool info summary: %v",
+		// 		err.Error())
+		// 	return 15
+		// }
 
 		newTicketLimit := int32(cfg.MPTriggerTickets)
 		mini := time.Duration(cfg.MempoolMinInterval) * time.Second

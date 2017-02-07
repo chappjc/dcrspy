@@ -97,8 +97,6 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 					continue
 				}
 
-				mempoolLog.Trace("New Tx: ", tx.Hash(), tx.MsgTx().TxIn[0].ValueIn)
-
 				// See if the transaction is a ticket purchase.  If not, just
 				// make a note of it and go back to the loop.
 				txType := stake.DetermineTxType(tx.MsgTx())
@@ -118,12 +116,16 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 				case stake.TxTypeSStx:
 					// Ticket purchase
 					ticketHash = tx.Hash()
+					oneTicket = 1
+					price := tx.MsgTx().TxOut[0].Value
+					mempoolLog.Tracef("Received ticket purchase %v, price %v",
+						ticketHash, dcrutil.Amount(price).ToCoin())
 				case stake.TxTypeSSGen:
 					// Vote
 					ticketHash = &tx.MsgTx().TxIn[1].PreviousOutPoint.Hash
-					mempoolLog.Tracef("Received vote %v for ticket %v", tx.Hash(), ticketHash)
+					mempoolLog.Debugf("Received vote %v for ticket %v", tx.Hash(), ticketHash)
 					// TODO: Show subsidy for this vote (Vout[2] - Vin[1] ?)
-					continue
+					// No continue statement so we can proceed if first of block
 				case stake.TxTypeSSRtx:
 					// Revoke
 					mempoolLog.Tracef("Received revoke transaction: %v", tx.Hash())
@@ -134,23 +136,18 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 					continue
 				}
 
-				price := tx.MsgTx().TxOut[0].Value
-				mempoolLog.Tracef("Received ticket purchase %v, price %v", ticketHash,
-					dcrutil.Amount(price).ToCoin())
 				// TODO: Get fee for this ticket (Vin[0] - Vout[0])
-
 				txHeight = tx.MsgTx().TxIn[0].BlockHeight
-				oneTicket = 1
 			}
 
 			// s.server.txMemPool.TxDescs()
+			p.mtx.Lock()
 			ticketHashes, err := client.GetRawMempool(dcrjson.GRMTickets)
 			if err != nil {
 				mempoolLog.Errorf("Could not get raw mempool: %v", err.Error())
 				continue
 			}
-			N := len(ticketHashes)
-			p.mpoolInfo.numTicketPurchasesInMempool = uint32(N)
+			p.mpoolInfo.numTicketPurchasesInMempool = uint32(len(ticketHashes))
 
 			// Decide if it is time to collect and record new data
 			// 1. Get block height
@@ -158,12 +155,12 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 			// 3. Collect mempool info (fee info), IF:
 			//	 a. block is new (height of Ticket-Tx > currentHeight)
 			//   OR
-			//   b. time since last exceeds > maxInterval
+			//   b. time since last > maxInterval
 			//	 OR
 			//   c. (num new tickets >= newTicketLimit
 			//       AND
 			//       time since lastCollectTime >= minInterval)
-			p.mtx.Lock()
+
 			// Atomics really aren't necessary here because of mutex
 			newBlock := txHeight > p.mpoolInfo.currentHeight
 			enoughNewTickets := atomic.AddInt32(
@@ -635,7 +632,7 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 	}
 
 	// Write fees to a file with block height in the name
-	fname := fmt.Sprintf("%s%d-%d-%d.json", s.nameBase, data.height,
+	fname := fmt.Sprintf("%s-%d-%d-%d.json", s.nameBase, data.height,
 		data.numTickets, time.Now().Unix())
 	//fname := fmt.Sprintf("%s.json", s.nameBase)
 	fullfile := filepath.Join(s.folder, fname)

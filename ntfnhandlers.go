@@ -140,7 +140,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 			case spyChans.newTxChan <- hash:
 			default:
 			}
-			//log.Info("Transaction accepted to mempool: ", hash, amount)
+			//log.Trace("Transaction accepted to mempool: ", hash, amount)
 		},
 		// Note: dcrjson.TxRawResult is from getrawtransaction
 		//OnTxAcceptedVerbose: func(txDetails *dcrjson.TxRawResult) {
