@@ -300,7 +300,7 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 
 	// Time this function
 	defer func(start time.Time) {
-		mempoolLog.Tracef("mempoolDataCollector.collect() completed in %v",
+		mempoolLog.Debugf("mempoolDataCollector.collect() completed in %v",
 			time.Since(start))
 	}(time.Now())
 

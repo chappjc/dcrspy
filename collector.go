@@ -74,7 +74,7 @@ func (t stakeInfoDataCollector) getHeight() (uint32, error) {
 func (t *stakeInfoDataCollector) collect(height uint32) (*stakeInfoData, error) {
 	// Time this function
 	defer func(start time.Time) {
-		log.Tracef("stakeInfoDataCollector.collect() completed in %v",
+		log.Debugf("stakeInfoDataCollector.collect() completed in %v",
 			time.Since(start))
 	}(time.Now())
 
@@ -212,7 +212,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// Time this function
 	defer func(start time.Time) {
-		log.Tracef("blockDataCollector.collect() completed in %v", time.Since(start))
+		log.Debugf("blockDataCollector.collect() completed in %v", time.Since(start))
 	}(time.Now())
 
 	// Run first client call with a timeout
