@@ -371,7 +371,10 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	}
 
 	numDecimals := 4
-	maxDigitsAccts := int(math.Floor(math.Log10(largestAcctBal)) + 1)
+	maxDigitsAccts := int(1)
+	if largestAcctBal > 0 {
+		maxDigitsAccts = int(math.Floor(math.Log10(largestAcctBal)) + 1)
+	}
 	balFmtA := "%" + strconv.Itoa(maxDigitsAccts+numDecimals+2) + "." +
 		strconv.Itoa(numDecimals) + "f"
 
