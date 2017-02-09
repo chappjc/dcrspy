@@ -89,7 +89,8 @@ func mainCore() int {
 
 	// Daemon client connection
 	dcrdClient, nodeVer, err := connectNodeRPC(cfg)
-	if err != nil {
+	if err != nil || dcrdClient == nil {
+		log.Infof("Connection to dcrd failed: %v", err)
 		return 4
 	}
 
@@ -201,6 +202,10 @@ func mainCore() int {
 	if !cfg.NoCollectStakeInfo {
 		var walletVer semver
 		dcrwClient, walletVer, err = connectWalletRPC(cfg)
+		if err != nil || dcrwClient == nil {
+			log.Infof("Connection to dcrwallet failed: %v", err)
+			return 17
+		}
 		log.Infof("Connected to dcrwallet (JSON-RPC API v%s)",
 			walletVer.String())
 	}
