@@ -1,5 +1,5 @@
 hash: b2e90c11432da59cb9c5531b41e8ba594c98987df3b62a5bfbd9e468271cba74
-updated: 2017-01-28T15:25:41.880664158-08:00
+updated: 2017-02-09T10:53:44.907545751-08:00
 imports:
 - name: github.com/btcsuite/btclog
   version: 73889fb79bd687870312b6e40effcecffbd57d30
@@ -8,7 +8,7 @@ imports:
 - name: github.com/btcsuite/go-flags
   version: 1679536dcc895411a9f5848d9a0250be7856448c
 - name: github.com/btcsuite/go-socks
-  version: 4720035b7bfd2a9bb130b1c184f8bbe41b6f0d0f
+  version: cfe8b59e565c1a5bd4e2005d77cd9aa8b2e14524
   subpackages:
   - socks
 - name: github.com/btcsuite/golangcrypto
@@ -22,7 +22,7 @@ imports:
 - name: github.com/decred/blake256
   version: a840e32d7c31fe2e0218607334cb120a683951a4
 - name: github.com/decred/dcrd
-  version: cdd4cf130dc3345dc3fa7615bcbc309ae2babb4b
+  version: bfc076ecf1557c370bde149daca9c35bfe74218c
   subpackages:
   - blockchain
   - blockchain/internal/dbnamespace
@@ -49,7 +49,7 @@ imports:
   subpackages:
   - base58
 - name: github.com/decred/dcrwallet
-  version: e2ec475aec073299cd98aa432b396ea7a1747922
+  version: 43620621173cdfb7997ccb10fe29321d412aa8e6
   subpackages:
   - netparams
   - walletdb

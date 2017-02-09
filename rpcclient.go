@@ -8,9 +8,7 @@ import (
 )
 
 var requiredChainServerAPI = semver{major: 2, minor: 0, patch: 0}
-
-// When and RPC for wallet api version is available:
-//var requiredWalletAPI = semver{major: 2, minor: 0, patch: 0}
+var requiredWalletAPI = semver{major: 1, minor: 0, patch: 0}
 
 func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	var dcrwCerts []byte
@@ -55,13 +53,13 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 		return nil, walletVer, fmt.Errorf("Unable to get node RPC version")
 	}
 
-	dcrwVer := ver["dcrdjsonrpcapi"]
+	dcrwVer := ver["dcrwalletjsonrpcapi"]
 	walletVer = semver{dcrwVer.Major, dcrwVer.Minor, dcrwVer.Patch}
 
-	if !semverCompatible(requiredChainServerAPI, walletVer) {
+	if !semverCompatible(requiredWalletAPI, walletVer) {
 		return nil, walletVer, fmt.Errorf("Node JSON-RPC server does not have "+
 			"a compatible API version. Advertises %v but require %v",
-			walletVer, requiredChainServerAPI)
+			walletVer, requiredWalletAPI)
 	}
 
 	return dcrwClient, walletVer, nil
