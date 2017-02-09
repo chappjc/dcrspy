@@ -393,7 +393,10 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 			balances.ImmatureCoinbaseRewards+balances.ImmatureStakeGeneration)
 	}
 
-	maxDigits := int(math.Floor(math.Log10(data.balances.AllAllAcounts)) + 1)
+	maxDigits := int(1)
+	if data.balances.AllAllAcounts > 0 {
+		maxDigits = int(math.Floor(math.Log10(data.balances.AllAllAcounts)) + 1)
+	}
 	balFmt := "%" + strconv.Itoa(maxDigits+numDecimals+2) + "." +
 		strconv.Itoa(numDecimals) + "f"
 
