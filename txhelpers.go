@@ -1,11 +1,15 @@
+// txhelpers.go contains helper functions for working with transactions and
+// blocks (e.g. checking for a transaction in a block).
+
 package main
 
 import (
+	"sort"
+
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/txscript"
 	"github.com/decred/dcrrpcclient"
 	"github.com/decred/dcrutil"
-	"sort"
 )
 
 // TxAction is what is happening to the transaction (mined or inserted into
@@ -19,7 +23,7 @@ const (
 	// removed? invalidated?
 )
 
-func txhashInSlice(txs []*dcrutil.Tx, txHash *chainhash.Hash) *dcrutil.Tx {
+func TxhashInSlice(txs []*dcrutil.Tx, txHash *chainhash.Hash) *dcrutil.Tx {
 	if len(txs) < 1 {
 		return nil
 	}
@@ -33,21 +37,21 @@ func txhashInSlice(txs []*dcrutil.Tx, txHash *chainhash.Hash) *dcrutil.Tx {
 	return nil
 }
 
-// includesTx checks if a block contains a transaction hash
-func includesStakeTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
+// includesStakeTx checks if a block contains a stake transaction hash
+func IncludesStakeTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
 	blockTxs := block.STransactions()
 
-	if tx := txhashInSlice(blockTxs, txHash); tx != nil {
+	if tx := TxhashInSlice(blockTxs, txHash); tx != nil {
 		return tx.Index(), tx.Tree()
 	}
 	return -1, -1
 }
 
 // includesTx checks if a block contains a transaction hash
-func includesTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
+func IncludesTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
 	blockTxs := block.Transactions()
 
-	if tx := txhashInSlice(blockTxs, txHash); tx != nil {
+	if tx := TxhashInSlice(blockTxs, txHash); tx != nil {
 		return tx.Index(), tx.Tree()
 	}
 	return -1, -1

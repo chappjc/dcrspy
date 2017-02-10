@@ -10,6 +10,7 @@ import (
 	"time"
 )
 
+// EmailConfig contains the email server address and credentials
 type EmailConfig struct {
 	emailAddr                      string
 	smtpUser, smtpPass, smtpServer string
