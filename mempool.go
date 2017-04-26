@@ -130,6 +130,7 @@ func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
 						continue
 					}
 					mempoolLog.Debugf("Vote in new block triggering mempool data collection")
+					time.Sleep(20 * time.Millisecond)
 				case stake.TxTypeSSRtx:
 					// Revoke
 					mempoolLog.Tracef("Received revoke transaction: %v", tx.Hash())
