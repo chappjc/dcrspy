@@ -7,8 +7,8 @@ import (
 	"github.com/decred/dcrrpcclient"
 )
 
-var requiredChainServerAPI = semver{major: 3, minor: 0, patch: 0}
-var requiredWalletAPI = semver{major: 3, minor: 0, patch: 0}
+var requiredChainServerAPI = semver{major: 3, minor: 1, patch: 0}
+var requiredWalletAPI = semver{major: 4, minor: 1, patch: 0}
 
 func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	var dcrwCerts []byte
