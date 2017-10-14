@@ -10,7 +10,7 @@ import:
   - ripemd160
 - package: github.com/btcsuite/seelog
 - package: github.com/btcsuite/websocket
-- package: github.com/decred/blake256
+- package: github.com/dchest/blake256
 - package: github.com/decred/dcrd
   version: master
   subpackages:
