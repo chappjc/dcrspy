@@ -25,15 +25,15 @@ import (
 	"net"
 	"os"
 	"os/signal"
+	"runtime/pprof"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
-	"runtime/pprof"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 )
 
 const (
@@ -71,7 +71,7 @@ func mainCore() int {
 	// Start with version info
 	log.Infof(appName+" version %s%v", ver.String(), spyart)
 
-	dcrrpcclient.UseLogger(clientLog)
+	rpcclient.UseLogger(clientLog)
 
 	log.Debugf("Output folder: %v", cfg.OutFolder)
 	log.Debugf("Log folder: %v", cfg.LogDir)
@@ -124,7 +124,7 @@ func mainCore() int {
 
 			a := s[0]
 
-			addr, err := dcrutil.DecodeAddress(a, activeNet.Params)
+			addr, err := dcrutil.DecodeAddress(a)
 			// or DecodeNetworkAddress for auto-detection of network
 			if err != nil {
 				log.Errorf("Invalid watchaddress %v", a)
@@ -173,7 +173,7 @@ func mainCore() int {
 	}
 
 	// For OnNewTickets
-	//  Commented since there is a bug in dcrrpcclient/notify.go
+	//  Commented since there is a bug in rpcclient/notify.go
 	// if err := dcrdClient.NotifyNewTickets(); err != nil {
 	// 	fmt.Printf("Failed to register daemon RPC client for  "+
 	// 		"new tickets (mempool) notifications: %s\n", err.Error())
@@ -198,7 +198,7 @@ func mainCore() int {
 
 	// Wallet
 
-	var dcrwClient *dcrrpcclient.Client
+	var dcrwClient *rpcclient.Client
 	if !cfg.NoCollectStakeInfo {
 		var walletVer semver
 		dcrwClient, walletVer, err = connectWalletRPC(cfg)
@@ -224,7 +224,6 @@ func mainCore() int {
 		// Close the channel so multiple goroutines can get the message
 		log.Infof("CTRL+C hit.  Closing goroutines.")
 		close(quit)
-		return
 	}()
 
 	// Saver mutex, to share the same underlying output resource between block
@@ -496,7 +495,7 @@ func debugTiming(start time.Time, fun string) {
 }
 
 func decodeNetAddr(addr string) dcrutil.Address {
-	address, _ := dcrutil.DecodeNetworkAddress(addr)
+	address, _ := dcrutil.DecodeAddress(addr)
 	return address
 }
 

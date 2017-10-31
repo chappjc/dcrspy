@@ -15,8 +15,8 @@ import (
 	"github.com/decred/dcrd/blockchain/stake"
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 )
 
 //var resetMempoolTix bool
@@ -63,7 +63,7 @@ func newMempoolMonitor(collector *mempoolDataCollector,
 // quit channel, the broadcasting mechanism used by main.
 // The newTxChan contains a chain hash for the transaction from the
 // notificiation, or a zero value hash indicating it was from a Ticker.
-func (p *mempoolMonitor) txHandler(client *dcrrpcclient.Client) {
+func (p *mempoolMonitor) txHandler(client *rpcclient.Client) {
 	defer p.wg.Done()
 	for {
 		select {
@@ -283,12 +283,12 @@ type mempoolData struct {
 type mempoolDataCollector struct {
 	mtx          sync.Mutex
 	cfg          *config
-	dcrdChainSvr *dcrrpcclient.Client
+	dcrdChainSvr *rpcclient.Client
 }
 
 // newMempoolDataCollector creates a new mempoolDataCollector.
 func newMempoolDataCollector(cfg *config,
-	dcrdChainSvr *dcrrpcclient.Client) (*mempoolDataCollector, error) {
+	dcrdChainSvr *rpcclient.Client) (*mempoolDataCollector, error) {
 	return &mempoolDataCollector{
 		mtx:          sync.Mutex{},
 		cfg:          cfg,
@@ -315,6 +315,9 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 	// Get a map of ticket hashes to getrawmempool results
 	// mempoolTickets[ticketHashes[0].String()].Fee
 	mempoolTickets, err := c.GetRawMempoolVerbose(dcrjson.GRMTickets)
+	if err != nil {
+		return nil, err
+	}
 	N := len(mempoolTickets)
 	allFees := make([]float64, 0, N)
 	for _, t := range mempoolTickets {
@@ -368,6 +371,9 @@ func (t *mempoolDataCollector) collect() (*mempoolData, error) {
 	}
 
 	height, err := c.GetBlockCount()
+	if err != nil {
+		return nil, err
+	}
 
 	// Fee info
 	numFeeBlocks := uint32(0)
@@ -657,6 +663,10 @@ func (s *MempoolFeeDumper) Store(data *mempoolData) error {
 		data.minableFees.allFees,
 		time.Now().UTC().Format(time.RFC822)},
 		"", "    ")
+	if err != nil {
+		mempoolLog.Error("Failed to marshal JSON: ", err)
+		return err
+	}
 
 	s.file = *fp
 	_, err = fmt.Fprintln(&s.file, string(j))

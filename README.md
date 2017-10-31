@@ -515,5 +515,5 @@ dcrspy borrows its logging and config file facilities, plus some boilerplate
 code in main.go, from the dcrticketbuyer project by the Decred developers.
 The rest is by chappjc.
 
-[1]: https://godoc.org/github.com/decred/dcrrpcclient
+[1]: https://godoc.org/github.com/decred/dcrd/rpcclient
 [2]: https://github.com/decred/dcrd/blob/master/docs/json_rpc_api.md

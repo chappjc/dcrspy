@@ -4,7 +4,8 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
-	"github.com/decred/dcrutil"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/wire"
 )
 
 const (
@@ -24,7 +25,7 @@ const (
 // watched addresses
 type BlockWatchedTx struct {
 	BlockHeight   int64
-	TxsForAddress map[string][]*dcrutil.Tx
+	TxsForAddress map[string][]*wire.MsgTx
 }
 
 // Channels are package-level variables for simplicity

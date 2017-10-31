@@ -424,14 +424,14 @@ func (s *StakeInfoDataToSummaryStdOut) Store(data *stakeInfoData) error {
 	fmt.Printf("  mempool tickets: %4d (own),     %5d (everyone)\n\n",
 		data.stakeinfo.OwnMempoolTix, data.stakeinfo.AllMempoolTix)
 
-	fmt.Printf("      ===>  Mining enabled: %t;  Unlocked: %t  <===\n",
-		data.walletInfo.StakeMining, data.walletInfo.Unlocked)
+	fmt.Printf("      ===>  Voting enabled: %t;  Unlocked: %t  <===\n",
+		data.walletInfo.Voting, data.walletInfo.Unlocked)
 
 	fmt.Printf("  Ticket price: %8.3f   |  Window progress: %3d / %3d\n",
 		data.stakeinfo.Difficulty, data.idxBlockInWindow, winSize)
 
-	fmt.Printf("  Your limit: %11.05f;    Fee:   %.4f DCR / KB\n",
-		data.walletInfo.TicketMaxPrice, data.walletInfo.TicketFee)
+	fmt.Printf("  Ticket fee:   %.4f DCR / KB\n",
+		data.walletInfo.TicketFee)
 
 	balanceSpendable := data.balances.SpendableAllAccounts
 	ticketFee := (550 * data.walletInfo.TicketFee) / 1000

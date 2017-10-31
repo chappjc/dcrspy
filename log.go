@@ -9,7 +9,7 @@ import (
 	"os"
 
 	"github.com/btcsuite/btclog"
-	"github.com/btcsuite/seelog"
+	"github.com/cihub/seelog"
 )
 
 // Loggers per subsytem.  Note that backendLog is a seelog logger that all of
@@ -112,16 +112,11 @@ func setLogLevel(subsystemID string, logLevel string) {
 	}
 
 	// Default to info if the log level is invalid.
-	level, ok := btclog.LogLevelFromString(logLevel)
+	level, ok := btclog.LevelFromString(logLevel)
 	if !ok {
-		level = btclog.InfoLvl
+		level = btclog.LevelInfo
 	}
 
-	// Create new logger for the subsystem if needed.
-	if logger == btclog.Disabled {
-		logger = btclog.NewSubsystemLogger(backendLog, subsystemID+": ")
-		useLogger(subsystemID, logger)
-	}
 	logger.SetLevel(level)
 }
 
