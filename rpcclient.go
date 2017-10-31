@@ -4,13 +4,13 @@ import (
 	"fmt"
 	"io/ioutil"
 
-	"github.com/decred/dcrrpcclient"
+	"github.com/decred/dcrd/rpcclient"
 )
 
 var requiredChainServerAPI = semver{major: 3, minor: 1, patch: 0}
 var requiredWalletAPI = semver{major: 4, minor: 1, patch: 0}
 
-func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
+func connectWalletRPC(cfg *config) (*rpcclient.Client, semver, error) {
 	var dcrwCerts []byte
 	var err error
 	var walletVer semver
@@ -27,7 +27,7 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 		"using certificate located in %s",
 		cfg.DcrwServ, cfg.DcrwUser, cfg.DcrwCert)
 
-	connCfgWallet := &dcrrpcclient.ConnConfig{
+	connCfgWallet := &rpcclient.ConnConfig{
 		Host:         cfg.DcrwServ,
 		Endpoint:     "ws",
 		User:         cfg.DcrwUser,
@@ -37,7 +37,7 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	}
 
 	ntfnHandlers := getWalletNtfnHandlers(cfg)
-	dcrwClient, err := dcrrpcclient.New(connCfgWallet, ntfnHandlers)
+	dcrwClient, err := rpcclient.New(connCfgWallet, ntfnHandlers)
 	if err != nil {
 		log.Errorf("Failed to start dcrwallet RPC client: %s\nPerhaps you"+
 			" wanted to start with --nostakeinfo?\n", err.Error())
@@ -65,7 +65,7 @@ func connectWalletRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	return dcrwClient, walletVer, nil
 }
 
-func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
+func connectNodeRPC(cfg *config) (*rpcclient.Client, semver, error) {
 	var dcrdCerts []byte
 	var err error
 	var nodeVer semver
@@ -82,7 +82,7 @@ func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 		"using certificate located in %s",
 		cfg.DcrdServ, cfg.DcrdUser, cfg.DcrdCert)
 
-	connCfgDaemon := &dcrrpcclient.ConnConfig{
+	connCfgDaemon := &rpcclient.ConnConfig{
 		Host:         cfg.DcrdServ,
 		Endpoint:     "ws", // websocket
 		User:         cfg.DcrdUser,
@@ -92,7 +92,7 @@ func connectNodeRPC(cfg *config) (*dcrrpcclient.Client, semver, error) {
 	}
 
 	ntfnHandlers := getNodeNtfnHandlers(cfg)
-	dcrdClient, err := dcrrpcclient.New(connCfgDaemon, ntfnHandlers)
+	dcrdClient, err := rpcclient.New(connCfgDaemon, ntfnHandlers)
 	if err != nil {
 		log.Errorf("Failed to start dcrd RPC client: %s\n", err.Error())
 		return nil, nodeVer, err

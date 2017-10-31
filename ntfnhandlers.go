@@ -8,10 +8,10 @@ import (
 	"time"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/wire"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
-	"github.com/decred/dcrwallet/wtxmgr"
+	"github.com/decred/dcrwallet/wallet/udb"
 )
 
 // Arbitrary command execution
@@ -19,8 +19,8 @@ import (
 // cfg.CmdArgs    // e.g. "127.0.0.1,-n-8"
 
 // Define notification handlers
-func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
-	return &dcrrpcclient.NotificationHandlers{
+func getNodeNtfnHandlers(cfg *config) *rpcclient.NotificationHandlers {
+	return &rpcclient.NotificationHandlers{
 		OnBlockConnected: func(blockHeaderSerialized []byte, transactions [][]byte) {
 			// OnBlockConnected: func(hash *chainhash.Hash, height int32,
 			// 	time time.Time, vb uint16) {
@@ -106,10 +106,10 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 			log.Debugf("Winning tickets: %v", strings.Join(txstr, ", "))
 		},
 		// maturing tickets
-		// BUG: dcrrpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
+		// BUG: rpcclient/notify.go (parseNewTicketsNtfnParams) is unable to
 		// Unmarshal fourth parameter as a map[hash]hash.
 		OnNewTickets: func(hash *chainhash.Hash, height int64, stakeDiff int64,
-			tickets map[chainhash.Hash]chainhash.Hash) {
+			tickets []*chainhash.Hash) {
 			for _, tick := range tickets {
 				log.Debugf("Mined new ticket: %v", tick.String())
 			}
@@ -117,7 +117,7 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 		// OnRelevantTxAccepted is invoked when a transaction containing a
 		// registered address is inserted into mempool.
 		OnRelevantTxAccepted: func(transaction []byte) {
-			rec, err := wtxmgr.NewTxRecord(transaction, time.Now())
+			rec, err := udb.NewTxRecord(transaction, time.Now())
 			if err != nil {
 				return
 			}
@@ -150,8 +150,8 @@ func getNodeNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
 	}
 }
 
-func getWalletNtfnHandlers(cfg *config) *dcrrpcclient.NotificationHandlers {
-	return &dcrrpcclient.NotificationHandlers{
+func getWalletNtfnHandlers(cfg *config) *rpcclient.NotificationHandlers {
+	return &rpcclient.NotificationHandlers{
 		OnAccountBalance: func(account string, balance dcrutil.Amount, confirmed bool) {
 			log.Debug("OnAccountBalance")
 		},

@@ -9,16 +9,16 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/txscript"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
 )
 
 // tryGetTransaction and tryGetRawTransactionVerbose are hacks while I figure
 // out the issue with getting the block hash from a transaction that is
 // supposedly mined.
 
-func tryGetTransaction(c *dcrrpcclient.Client, txh *chainhash.Hash,
+func tryGetTransaction(c *rpcclient.Client, txh *chainhash.Hash,
 	maxTries int) (*dcrjson.GetTransactionResult, error) {
 	numTries := 0
 	for {
@@ -36,7 +36,7 @@ func tryGetTransaction(c *dcrrpcclient.Client, txh *chainhash.Hash,
 	}
 }
 
-func tryGetRawTransactionVerbose(c *dcrrpcclient.Client, txh *chainhash.Hash,
+func tryGetRawTransactionVerbose(c *rpcclient.Client, txh *chainhash.Hash,
 	maxTries int) (*dcrjson.TxRawResult, error) {
 	numTries := 0
 	for {
@@ -59,7 +59,7 @@ func tryGetRawTransactionVerbose(c *dcrrpcclient.Client, txh *chainhash.Hash,
 // required, emailConf may be a nil pointer.  addrs is a map of addresses as
 // strings with TxAction values indicating if email should be sent in response
 // to transactions involving the keyed address.
-func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
+func handleReceivingTx(c *rpcclient.Client, addrs map[string]TxAction,
 	emailConf *EmailConfig, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()
@@ -90,9 +90,9 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 				}
 
 				for _, tx := range txs {
-					txHash := tx.Hash().String()
+					txHash := tx.TxHash().String()
 					// Check the addresses associated with the PkScript of each TxOut
-					for outID, txOut := range tx.MsgTx().TxOut {
+					for outID, txOut := range tx.TxOut {
 						scriptClass, txAddrs, _, err :=
 							txscript.ExtractPkScriptAddrs(txOut.Version,
 								txOut.PkScript, activeChain)
@@ -192,7 +192,7 @@ func handleReceivingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
 // time, watch for a transaction with an input (source) whos previous outpoint
 // is one of the watched addresses.
 // But I am not sure we can do that here with the Tx and BlockDetails provided.
-func handleSendingTx(c *dcrrpcclient.Client, addrs map[string]TxAction,
+func handleSendingTx(c *rpcclient.Client, addrs map[string]TxAction,
 	spendTxChan <-chan *watchedAddrTx, wg *sync.WaitGroup,
 	quit <-chan struct{}) {
 	defer wg.Done()

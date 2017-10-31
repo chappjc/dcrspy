@@ -7,9 +7,10 @@ import (
 	"sort"
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 	"github.com/decred/dcrd/txscript"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
+	"github.com/decred/dcrd/wire"
 )
 
 // TxAction is what is happening to the transaction (mined or inserted into
@@ -58,7 +59,7 @@ func IncludesTx(txHash *chainhash.Hash, block *dcrutil.Block) (int, int8) {
 }
 
 func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]TxAction,
-	c *dcrrpcclient.Client) map[string][]*dcrutil.Tx {
+	c *rpcclient.Client) map[string][]*dcrutil.Tx {
 	addrMap := make(map[string][]*dcrutil.Tx)
 
 	checkForOutpointAddr := func(blockTxs []*dcrutil.Tx) {
@@ -106,13 +107,13 @@ func blockConsumesOutpointWithAddresses(block *dcrutil.Block, addrs map[string]T
 // BlockReceivesToAddresses checks a block for transactions paying to the
 // specified addresses, and creates a map of addresses to a slice of dcrutil.Tx
 // involving the address.
-func BlockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction) map[string][]*dcrutil.Tx {
-	addrMap := make(map[string][]*dcrutil.Tx)
+func BlockReceivesToAddresses(block *wire.MsgBlock, addrs map[string]TxAction) map[string][]*wire.MsgTx {
+	addrMap := make(map[string][]*wire.MsgTx)
 
-	checkForAddrOut := func(blockTxs []*dcrutil.Tx) {
+	checkForAddrOut := func(blockTxs []*wire.MsgTx) {
 		for _, tx := range blockTxs {
 			// Check the addresses associated with the PkScript of each TxOut
-			for _, txOut := range tx.MsgTx().TxOut {
+			for _, txOut := range tx.TxOut {
 				_, txOutAddrs, _, err := txscript.ExtractPkScriptAddrs(txOut.Version,
 					txOut.PkScript, activeChain)
 				if err != nil {
@@ -125,7 +126,7 @@ func BlockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction) m
 					addrstr := txAddr.EncodeAddress()
 					if _, ok := addrs[addrstr]; ok {
 						if _, gotSlice := addrMap[addrstr]; !gotSlice {
-							addrMap[addrstr] = make([]*dcrutil.Tx, 0) // nil
+							addrMap[addrstr] = make([]*wire.MsgTx, 0) // nil
 						}
 						addrMap[addrstr] = append(addrMap[addrstr], tx)
 					}
@@ -134,8 +135,8 @@ func BlockReceivesToAddresses(block *dcrutil.Block, addrs map[string]TxAction) m
 		}
 	}
 
-	checkForAddrOut(block.Transactions())
-	checkForAddrOut(block.STransactions())
+	checkForAddrOut(block.Transactions)
+	checkForAddrOut(block.STransactions)
 
 	return addrMap
 }

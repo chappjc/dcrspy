@@ -16,8 +16,8 @@ import (
 
 	"github.com/decred/dcrd/chaincfg/chainhash"
 	"github.com/decred/dcrd/dcrjson"
-	"github.com/decred/dcrrpcclient"
-	"github.com/decred/dcrutil"
+	"github.com/decred/dcrd/dcrutil"
+	"github.com/decred/dcrd/rpcclient"
 )
 
 // WalletBalances contains various wallet balances in coins
@@ -46,14 +46,14 @@ type stakeInfoData struct {
 
 type stakeInfoDataCollector struct {
 	cfg          *config
-	dcrdChainSvr *dcrrpcclient.Client
-	dcrwChainSvr *dcrrpcclient.Client
+	dcrdChainSvr *rpcclient.Client
+	dcrwChainSvr *rpcclient.Client
 }
 
 // newStakeInfoDataCollector creates a new stakeInfoDataCollector.
 func newStakeInfoDataCollector(cfg *config,
-	dcrdChainSvr *dcrrpcclient.Client,
-	dcrwChainSvr *dcrrpcclient.Client) (*stakeInfoDataCollector, error) {
+	dcrdChainSvr *rpcclient.Client,
+	dcrwChainSvr *rpcclient.Client) (*stakeInfoDataCollector, error) {
 	return &stakeInfoDataCollector{
 		cfg:          cfg,
 		dcrdChainSvr: dcrdChainSvr,
@@ -190,12 +190,12 @@ type blockData struct {
 type blockDataCollector struct {
 	mtx          sync.Mutex
 	cfg          *config
-	dcrdChainSvr *dcrrpcclient.Client
+	dcrdChainSvr *rpcclient.Client
 }
 
 // newBlockDataCollector creates a new blockDataCollector.
 func newBlockDataCollector(cfg *config,
-	dcrdChainSvr *dcrrpcclient.Client) (*blockDataCollector, error) {
+	dcrdChainSvr *rpcclient.Client) (*blockDataCollector, error) {
 	return &blockDataCollector{
 		mtx:          sync.Mutex{},
 		cfg:          cfg,
@@ -226,7 +226,6 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 	go func() {
 		bestBlockHash, err := t.dcrdChainSvr.GetBestBlockHash()
 		toch <- bbhRes{err, bestBlockHash}
-		return
 	}()
 
 	var bbs bbhRes
@@ -244,7 +243,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 		return nil, err
 	}
 
-	blockHeader := bestBlock.MsgBlock().Header
+	blockHeader := bestBlock.Header
 	//timestamp := blockHeader.Timestamp
 	height := blockHeader.Height
 
@@ -287,7 +286,9 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 
 	// To get difficulty, use getinfo or getmininginfo
 	info, err := t.dcrdChainSvr.GetInfo()
-	//t.dcrdChainSvr.GetConnectionCount()
+	if err != nil {
+		return nil, err
+	}
 
 	// blockVerbose, err := t.dcrdChainSvr.GetBlockVerbose(bestBlockHash, false)
 	// if err != nil {
@@ -300,7 +301,7 @@ func (t *blockDataCollector) collect(noTicketPool bool) (*blockData, error) {
 	// instead:
 	blockHeaderResults := dcrjson.GetBlockHeaderVerboseResult{
 		Hash:          bestBlockHash.String(),
-		Confirmations: uint64(1),
+		Confirmations: 1,
 		Version:       blockHeader.Version,
 		PreviousHash:  blockHeader.PrevBlock.String(),
 		MerkleRoot:    blockHeader.MerkleRoot.String(),

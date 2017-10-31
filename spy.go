@@ -51,7 +51,7 @@ out:
 				break out
 			}
 			block, _ := p.collector.dcrdChainSvr.GetBlock(hash)
-			height := block.Height()
+			height := int64(block.Header.Height)
 			daemonLog.Infof("Block height %v connected", height)
 
 			if len(p.watchaddrs) > 0 {
